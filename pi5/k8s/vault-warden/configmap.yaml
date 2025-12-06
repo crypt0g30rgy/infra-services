@@ -4,27 +4,17 @@ metadata:
   name: vaultwarden-config
   namespace: vaultwarden
 data:
-  DOMAIN: "https://vault.example.com"
+  # Public URL of your Vaultwarden instance
+  DOMAIN: "https://secret-vault.mypasswords.com"
+
+  # Production security best practice: disable new signups
   SIGNUPS_ALLOWED: "false"
-  INVITATIONS_ALLOWED: "false"
-  SIGNUPS_DOMAINS_WHITELIST: ""
-  SHOW_PASSWORD_HINT: "false"
-  LOG_LEVEL: "info"
+
+  # Enable WebSocket real-time sync
   WEBSOCKET_ENABLED: "true"
-  WEBSOCKET_ADDRESS: "0.0.0.0"
-  WEBSOCKET_PORT: "3012"
-  ROCKET_PORT: "80"
-  DATABASE_URL: "postgres://vaultwarden:CHANGE_ME@postgres.vaultwarden.svc.cluster.local:5432/vaultwarden"
-  SMTP_HOST: "smtp.mail.example.com"
-  SMTP_FROM: "vault@example.com"
-  SMTP_PORT: "587"
-  SMTP_SSL: "false"
-  SMTP_USERNAME: ""
-  SMTP_PASSWORD: ""
-  ADMIN_TOKEN: ""
-  DISABLE_ADMIN_TOKEN: "false"
-  ENABLE_IPV4_ONLY: "false"
-  LOG_FILE: ""
+
+  # Optional but recommended for monitoring
   METRICS: "true"
-  ENV_FILE: ""
+
+  # Always keep /data as default storage path
   DATA_FOLDER: "/data"
