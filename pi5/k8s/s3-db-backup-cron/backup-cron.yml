@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vaultwarden-pg-backup
+  namespace: vaultwarden
+spec:
+  schedule: "0 2 * * *"  # daily at 02:00 UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: vaultwarden-backup
+          restartPolicy: Never
+          containers:
+            - name: pg-backup
+              image: ubuntu:22.04
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  echo "[0/8] Installing dependencies..."
+
+                  echo "Updating package lists..."
+                  export DEBIAN_FRONTEND=noninteractive
+
+                  apt-get update && apt-get install -y \
+                      curl \
+                      bash \
+                      postgresql-client \
+                      awscli \
+                      ca-certificates \
+                      && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+                  echo "[AWS CLI Version]"
+                  aws --version
+
+                  echo "[Fetching kubectl...]"
+                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                  install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+                  rm kubectl
+
+                  echo "[1/8] Locating PostgreSQL pod..."
+                  PG_POD=$(kubectl -n vaultwarden get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}')
+
+                  TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+                  FILE="vaultwarden-${TIMESTAMP}.sql.gz"
+                  CHECKSUM_FILE="${FILE}.sha256"
+                  TMPFILE="/tmp/$FILE"
+
+                  echo "[2/8] Dumping and compressing database..."
+                  kubectl -n vaultwarden exec "$PG_POD" -- pg_dump -U vaultwarden vaultwarden -F c | gzip -c > "$TMPFILE"
+
+                  echo "[3/8] Creating checksum..."
+                  sha256sum "$TMPFILE" | awk '{print $1}' > "/tmp/$CHECKSUM_FILE"
+
+                  echo "[4/8] Uploading backup to S3..."
+                  aws s3 cp "$TMPFILE" "s3://${S3_BUCKET}/$FILE"
+                  aws s3 cp "/tmp/$CHECKSUM_FILE" "s3://${S3_BUCKET}/$CHECKSUM_FILE"
+
+                  echo "[5/8] Enforcing retention..."
+                  aws s3 ls "s3://${S3_BUCKET}/" | awk '$4 ~ /vaultwarden-.*\.sql\.gz/ {print $4}' | while read OLD_FILE; do
+
+                      FILE_DATE_RAW=$(echo "$OLD_FILE" | sed -E 's/vaultwarden-([0-9TZ]+).*/\1/')
+
+                      # Normalize timestamp for GNU date
+                      FILE_DATE_FMT="$(echo "$FILE_DATE_RAW" | sed -E \
+                          's/([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z/\1-\2-\3 \4:\5:\6 UTC/')"
+
+                      FILE_TS=$(date -d "$FILE_DATE_FMT" +%s)
+                      CUTOFF=$(date -d "-${RETENTION_DAYS} days" +%s)
+
+                      if [[ "$FILE_TS" -lt "$CUTOFF" ]]; then
+                          echo "Deleting expired: $OLD_FILE"
+                          aws s3 rm "s3://${S3_BUCKET}/$OLD_FILE"
+                          aws s3 rm "s3://${S3_BUCKET}/${OLD_FILE}.sha256" || true
+                      fi
+                  done
+
+                  echo "[6/8] Cleaning up local temp files..."
+                  rm -f "$TMPFILE" "/tmp/$CHECKSUM_FILE"
+
+                  echo "[7/8] Vaultwarden backup completed successfully!"
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-backup-env
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-backup-env
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: AWS_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-backup-env
+                      key: AWS_REGION
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-backup-env
+                      key: S3_BUCKET
+                - name: RETENTION_DAYS
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-backup-env
+                      key: RETENTION_DAYS
