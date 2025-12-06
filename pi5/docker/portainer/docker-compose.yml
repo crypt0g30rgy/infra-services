@@ -1,0 +1,36 @@
+version: "3.9"
+
+name: portainer  # 👈 Ensures consistent project name
+
+services:
+  portainer:
+    image: portainer/portainer-ce:2.33.2-alpine
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # Portainer Web UI
+      # - "9443:9443"
+      # - "8000:8000"   # Agent communication (optional)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # manage local Docker
+      - portainer_data:/data                       # persistent data
+      - ./kubeconfig.yaml:/kubeconfig.yaml:ro
+    environment:
+      # Optional: automatically use your kubeconfig file
+      - KUBECONFIG_PATH=/kubeconfig.yaml
+    networks:
+      - dashboards
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`${PORTAINER_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls=true"
+      - "traefik.http.routers.portainer.tls.certresolver=myresolver"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+volumes:
+  portainer_data:
+
+networks:
+  dashboards:
+    external: true

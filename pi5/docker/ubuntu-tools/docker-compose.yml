@@ -1,0 +1,15 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true   # use the same network your Drone stack is already on
+
+services:
+  ubuntu-tools:
+    image: ubuntu-tools:latest
+    container_name: ubuntu-tools
+    networks:
+      - internal
+    tty: true
+    stdin_open: true
+    command: sleep infinity

@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  openvpn:
+    image: kylemanna/openvpn:latest
+    container_name: openvpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "1194:1194/udp"     # VPN UDP port
+    volumes:
+      - ./data:/etc/openvpn
+    environment:
+      - OVPN_NETWORK=10.8.0.0/24
+      - OVPN_SERVER=udp://${OVPN_SERVER}  # <- change to your domain or public IP
+      - OVPN_PROTO=udp
+      - OVPN_PORT=1194
+    networks:
+      - vpn-net
+
+networks:
+  vpn-net:
+    driver: bridge
+
+# To initialize the OpenVPN configuration, run the following command once:
+
+# docker run -v $PWD/data:/etc/openvpn --rm kylemanna/openvpn ovpn_genconfig -u udp://YOUR_DOMAIN_OR_IP
+
+# Then generate the certificates:
+
+# docker run -v $PWD/data:/etc/openvpn --rm -it kylemanna/openvpn ovpn_initpki
+
+# Follow the prompts to set up the CA and server certificate.
+# After that, start the OpenVPN server with:
+
+# docker-compose up -d
+
+# To generate client configuration files, use:
+
+# docker run -v $PWD/data:/etc/openvpn --rm -it kylemanna/openvpn easyrsa build-client-full CLIENTNAME nopass
+# docker run -v $PWD/data:/etc/openvpn --rm kylemanna/openvpn ovpn_getclient CLIENTNAME > CLIENTNAME.ovpn
+
+# Replace YOUR_DOMAIN_OR_IP and CLIENTNAME with appropriate values.

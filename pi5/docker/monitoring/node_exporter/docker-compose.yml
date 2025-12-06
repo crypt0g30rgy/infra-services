@@ -1,0 +1,27 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true
+
+services:
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: unless-stopped
+    pid: "host"
+    network_mode: "host"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|run|mnt|var/lib/docker/.+)($|/)"'
+    mem_limit: 256m
+    mem_reservation: 64m
+    memswap_limit: 512m
+    cpus: "0.25"
+    cpuset: "2"

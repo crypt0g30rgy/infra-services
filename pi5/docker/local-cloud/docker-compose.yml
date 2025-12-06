@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"              # Edge
+      - "4510:4510"              # LocalStack Web UI
+    environment:
+      - SERVICES=s3,lambda,dynamodb,sqs,ses
+      - DEBUG=1
+      - ENFORCE_IAM=1
+      - LOCALSTACK_UI=1          # enable Web UI
+      - AWS_DEFAULT_REGION=eu-west-1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./localstack-data:/var/lib/localstack"

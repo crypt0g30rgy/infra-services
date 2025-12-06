@@ -1,0 +1,27 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true
+
+services:
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    mem_limit: 512m
+    mem_reservation: 128m
+    memswap_limit: 1g
+    cpus: "0.5"
+    cpuset: "3"
+    networks:
+      - internal

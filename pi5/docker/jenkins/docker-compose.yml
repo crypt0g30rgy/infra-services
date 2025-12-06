@@ -1,0 +1,34 @@
+version: "3.8"
+
+networks:
+  ci-cd:
+    external: true   # use the same network your Traefik stack is already on
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    user: "1000:1000"                  # run as non-root if desired
+    ports:
+      - "8079:8080"                     # Jenkins web UI
+      - "50000:50000"                   # Jenkins agent connections
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - ./logs:/var/log/jenkins
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+    networks:
+      - ci-cd
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`${JENKINS_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=myresolver"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.jenkins-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.jenkins.middlewares=jenkins-https-redirect"
+
+volumes:
+  jenkins_data:

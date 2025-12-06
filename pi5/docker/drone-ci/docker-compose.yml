@@ -1,0 +1,58 @@
+version: '2'
+
+services:
+  drone-server:
+    image: drone/drone:2.26
+    container_name: drone-server
+    restart: always
+    volumes:
+      - ./drone-data:/var/lib/drone/
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # GitHub OAuth
+      - DRONE_GITHUB_SERVER=https://github.com
+      - DRONE_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - DRONE_GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - DRONE_USER_CREATE=username:${GITHUB_USER},admin:true
+      - DRONE_USER_FILTER=${GITHUB_ORG}
+
+      # Public server URL (CF Tunnel)
+      - DRONE_SERVER_HOST=${DRONE_SERVER_HOST}
+      - DRONE_SERVER_PROTO=${DRONE_SERVER_PROTO}
+      - DRONE_TLS_AUTOCERT=false
+
+      # Database
+      - DRONE_DATABASE_DRIVER=sqlite3
+      - DRONE_DATABASE_DATASOURCE=/var/lib/drone/database.sqlite
+
+      # Runner RPC
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
+      - DRONE_LOGS_DEBUG=true
+
+    networks:
+      - ci-cd
+#    ports:
+#      - "80:80"   # Internal HTTP; CF Tunnel handles HTTPS
+
+  drone-runner:
+    image: drone/drone-runner-docker:1.8
+    container_name: drone-runner
+    restart: always
+    depends_on:
+      - drone-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Internal Docker hostname for RPC
+      - DRONE_RPC_HOST=drone-server:80
+      - DRONE_RPC_PROTO=http
+      - DRONE_RPC_SECRET=${DRONE_RPC_SECRET}
+      - DRONE_RUNNER_CAPACITY=2
+      - DRONE_RUNNER_NAME=pi5-runner
+      - DRONE_LOGS_DEBUG=true
+    networks:
+      - ci-cd
+
+networks:
+  ci-cd:
+    external: true

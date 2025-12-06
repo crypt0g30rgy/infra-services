@@ -1,0 +1,59 @@
+# traefik.yml
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    transport:
+      lifeCycle:
+        requestAcceptGraceTimeout: 0
+        graceTimeOut: 0
+      respondingTimeouts:
+        idleTimeout: "300s"
+        readTimeout: "300s"
+        writeTimeout: "300s"
+        
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    filename: /dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      storage: /letsencrypt/acme.json
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory # Use staging for testing
+      # Uncomment the line below to use Let's Encrypt production environment
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      dnsChallenge:
+        provider: cloudflare # change as required
+        # disablePropagationCheck: true # Some people using Cloudflare note this can solve DNS propagation issues.
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+
+log:
+  level: DEBUG                    # DEBUG, INFO, WARN, ERROR
+  filePath: "/var/log/traefik/traefik.log"
+  format: json                    # or common
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: json
+  bufferingSize: 100              # async buffer for performance
+  filters:
+    retryAttempts: true
+    minDuration: "10ms"

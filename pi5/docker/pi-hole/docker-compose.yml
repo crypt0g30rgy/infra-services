@@ -1,0 +1,52 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true
+  pihole_macvlan:
+    external: true
+
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    restart: unless-stopped
+    networks:
+      pihole_macvlan:
+        ipv4_address: 192.168.0.99   # Choose an unused IP in your LAN
+      internal:
+    environment:
+      TZ: "Europe/Moscow"
+    volumes:
+      - ./etc-pihole:/etc/pihole
+      - ./etc-dnsmasq.d:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+      - CAP_SYS_TIME
+      - CAP_SYS_NICE
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pihole.rule=Host(`${PIHOLE_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.pihole.entrypoints=websecure"
+      - "traefik.http.routers.pihole.tls.certresolver=myresolver"
+      - "traefik.http.routers.pihole.tls=true"
+      - "traefik.http.services.pihole.loadbalancer.server.port=80"
+
+  unbound:
+    container_name: unbound
+    image: pedantic/unbound:latest
+    restart: unless-stopped
+    # ports:
+    #   - "5335:5335/tcp"
+    #   - "5335:5335/udp"
+    # cap_drop:
+    #   - ALL                                     # drop all capabilities
+    volumes:
+      - ./unbound:/opt/unbound/etc/unbound:ro
+    # security_opt:
+    #   - no-new-privileges:true
+    #   - seccomp:unconfined
+    networks:
+      - internal
+
+# docker network create -d macvlan --subnet=192.168.0.0/24 --gateway=192.168.0.1 -o parent=eth0 pihole_macvlan

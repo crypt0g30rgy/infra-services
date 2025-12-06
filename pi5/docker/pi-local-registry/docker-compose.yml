@@ -1,0 +1,47 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true
+
+services:
+  registry:
+    image: registry:2
+    container_name: pi-local-registry
+    restart: unless-stopped
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+    volumes:
+      - ./data:/var/lib/registry
+    labels:
+      - "traefik.enable=true"
+
+      # --------------------------
+      # Internal Router
+      # --------------------------
+      - "traefik.http.routers.registry-internal.rule=Host(`${REGISTRY_INTERNAL_HOST}`)"
+      - "traefik.http.routers.registry-internal.entrypoints=websecure"
+      - "traefik.http.routers.registry-internal.tls=true"
+      - "traefik.http.routers.registry-internal.middlewares=registry-auth"
+      - "traefik.http.routers.registry-internal.tls.certresolver=myresolver"
+
+      # --------------------------
+      # External Router
+      # --------------------------
+      - "traefik.http.routers.registry-external.rule=Host(`${REGISTRY_EXTERNAL_HOST}`)"
+      - "traefik.http.routers.registry-external.entrypoints=websecure"
+      - "traefik.http.routers.registry-external.tls.certresolver=myresolver"
+      - "traefik.http.routers.registry-external.middlewares=registry-auth" # ✅ Add authentication middleware
+
+      # --------------------------
+      # Basic Auth Middleware (shared)
+      # --------------------------
+      - "traefik.http.middlewares.registry-auth.basicauth.users=${REGISTRY_AUTH}"
+
+      # --------------------------
+      # Shared Service
+      # --------------------------
+      - "traefik.http.services.registry-internal.loadbalancer.server.port=5000"
+
+    networks:
+      - internal

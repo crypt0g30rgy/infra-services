@@ -1,0 +1,45 @@
+version: "3.8"
+
+networks:
+  proxy:
+    external: true
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/html:/usr/share/nginx/html:ro
+
+    mem_limit: 256m
+    cpus: 0.5
+
+    # Traefik and Network Configuration
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+
+      # -----------------------------
+      # 🔒 External Router (Cloudflare)
+      # -----------------------------
+      - "traefik.http.routers.nginx-external.rule=Host(`${NGINX_EXTERNAL_HOST}`)"  # e.g. nginx.example.com
+      - "traefik.http.routers.nginx-external.entrypoints=websecure"
+      - "traefik.http.routers.nginx-external.tls.certresolver=myresolver"
+      # Optional: Ensure only Cloudflare IPs can reach it
+      - "traefik.http.routers.nginx-external.middlewares=cloudflare-ips@file"
+
+      # -----------------------------
+      # 🏠 Internal Router (Local LAN)
+      # -----------------------------
+      - "traefik.http.routers.nginx-internal.rule=Host(`${NGINX_INTERNAL_HOST}`)"  # e.g. nginx.local.lan
+      - "traefik.http.routers.nginx-internal.entrypoints=websecure"
+      - "traefik.http.routers.nginx-internal.tls.certresolver=myresolver"
+      # Optional: internal IP whitelist
+      - "traefik.http.routers.nginx-internal.middlewares=internal-ips@file"
+
+      # -----------------------------
+      # Shared Service
+      # -----------------------------
+      - "traefik.http.services.nginx.loadbalancer.server.port=80"

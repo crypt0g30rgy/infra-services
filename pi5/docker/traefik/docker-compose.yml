@@ -1,0 +1,74 @@
+version: "3.8"
+
+networks:
+  proxy:
+    external: true # or comment this line to auto create the network create with: docker network create proxy
+  dashboards:
+    external: true # or comment this line to auto create the network create with: docker network create web
+  internal:
+    external: true
+
+services:
+  traefik:
+    image: traefik:v3.6.2
+    container_name: traefik
+    restart: unless-stopped
+    
+    security_opt:
+      - no-new-privileges:true # helps to increase security
+    env_file:
+      - .env # store other secrets e.g., dashboard password
+    command:
+      - "--configFile=/traefik.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "11000:8080" # <- Traefik Dashboard Port
+    environment:
+      - TRAEFIK_DASHBOARD_CREDENTIALS=${TRAEFIK_DASHBOARD_CREDENTIALS} # <- set this in your .env file e.g admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/ which is admin:password
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # <- Cloudflare API token file
+      - LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL} # <- your email for Let's Encrypt notifications
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./letsencrypt:/letsencrypt
+      - ./logs:/var/log/traefik   # <- log directory
+      - ./plugins:/plugins-local:ro  # <- local plugins directory
+    networks:
+      - dashboards # <- network for traefik and your services
+      - internal # <- internal network for secure services
+      - proxy # <- network for proxies
+
+    labels:
+      # Dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.traefik.entrypoints=websecure" # <- use websecure entrypoint
+      - "traefik.http.routers.traefik.tls=true" # <- enable TLS
+      - "--certificatesresolvers.myresolver.acme.email=${LETS_ENCRYPT_EMAIL}" # <- your email for Let's Encrypt notifications
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver" # <- use the certresolver defined in traefik.yml
+      - "traefik.http.routers.traefik.middlewares=auth" # <- enable authentication middleware
+      - "traefik.http.middlewares.auth.basicauth.removeheader=true" # <- remove the header after authentication
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}"
+      - "traefik.http.routers.traefik.service=api@internal" # <- enable the api service
+      - "traefik.http.routers.traefik.priority=10" # <- set a high priority to avoid conflicts with other routers
+      - "traefik.http.routers.whoami.tls.domains[0].main=${DOMAIN}" # <- main domain for the certificate
+      - "traefik.http.routers.whoami.tls.domains[0].sans=${WILDCARD_DOMAIN}" # <- wildcard domain for the certificate
+      
+      # Consolidated Dashboard Router
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.local`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
+      - "traefik.http.routers.dashboard.middlewares=host-scraper"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.mainHost=dashboard.local"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.pathPrefix=/"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.pihole=pihole.local"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.grafana=${GRAFANA_INTERNAL_HOST}"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.portainer=${PORTAINER_INTERNAL_HOST}"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.jenkins=${JENKINS_INTERNAL_HOST}"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.gitea=${GITEA_INTERNAL_HOST}"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.registry=${REGISTRY_INTERNAL_HOST}"
+      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.stripPrefix=true"
+      - "traefik.http.routers.dashboard.service=noop@internal"
+      

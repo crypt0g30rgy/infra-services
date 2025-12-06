@@ -1,0 +1,52 @@
+version: "3.8"
+
+networks:
+  internal:
+    external: true
+
+services:
+  gitea-db:
+    image: mariadb:11
+    container_name: gitea-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}  # set this in your .env file
+      MYSQL_DATABASE: ${DB_DATABASE}      # set this in your .env file
+      MYSQL_USER: $DB_USER}              # set this in your .env file
+      MYSQL_PASSWORD: ${DB_PASSWORD}  # set this in your .env file
+    volumes:
+      - ./data/db:/var/lib/mysql
+    networks:
+      - internal
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    restart: unless-stopped
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      DB_TYPE: ${DB_TYPE}  # set this in your .env file, e.g mysql
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_DATABASE}  # set this in your .env file
+      DB_USER: ${DB_USER}  # set this in your .env file
+      DB_PASSWD: ${DB_PASSWORD}  # set this in your .env file
+      ROOT_URL: http://${GITEA_INTERNAL_HOST}   # change to your domain
+    volumes:
+      - ./data/gitea:/data
+#    ports:
+#      - "3000:3000"   # web UI
+#      - "222:22"      # SSH for git
+    depends_on:
+      - gitea-db
+    networks:
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`${GITEA_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.gitea.entrypoints=websecure"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+      - "traefik.http.routers.gitea.middlewares=auth"
+      - "traefik.http.routers.gitea.tls.certresolver=myresolver"
+      - "traefik.http.routers.gitea.tls=true"
+      - "traefik.http.middlewares.auth.basicauth.users=${GITEA_AUTH}" # <- set this in your .env file e.g admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/ which is admin:password

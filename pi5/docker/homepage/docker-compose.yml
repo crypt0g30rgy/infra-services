@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config:/app/config     # config files
+      - /var/run/docker.sock:/var/run/docker.sock:ro # optional: show Docker containers
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Moscow
+      HOMEPAGE_ALLOWED_HOSTS: "${HOMEPAGE_INTERNAL_HOST},localhost"
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homepage.rule=Host(`${HOMEPAGE_INTERNAL_HOST}`)" # <- change to your domain
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls.certresolver=myresolver"
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+networks:
+  internal:
+    external: true
+    name: internal
+  

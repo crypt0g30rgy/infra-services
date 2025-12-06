@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    restart: unless-stopped
+    networks:
+      pihole_macvlan:
+        ipv4_address: 192.168.0.98   # Choose an unused IP in your LAN
+      internal:
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./config:/opt/adguardhome/conf
+    environment:
+      - TZ=Europe/Moscow
+
+networks:
+  internal:
+    external: true
+  pihole_macvlan:
+    external: true

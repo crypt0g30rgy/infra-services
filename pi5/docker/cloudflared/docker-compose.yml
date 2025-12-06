@@ -1,0 +1,27 @@
+version: "3.8"
+
+networks:
+  proxy:
+    external: true
+  internal:
+    external: true
+  ci-cd:
+    external: true
+  pi:
+    external: true
+services:
+  # -------------------------
+  # Cloudflare Tunnel
+  # -------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    container_name: cloudflared
+    restart: unless-stopped
+    networks:
+      - proxy
+      - internal
+      - ci-cd
+      - pi
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    labels:
+      - "traefik.enable=false"  # disable traefik for this container

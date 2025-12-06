@@ -1,0 +1,31 @@
+version: "3.8"
+
+networks:
+  proxy:
+    external: true  # make sure your Traefik network exists
+
+services:
+  mobsf:
+    image: opensecurity/mobile-security-framework-mobsf:latest
+    container_name: mobsf
+    restart: unless-stopped
+
+    # limit to two cpus and 8GB RAM
+    cpus: '2'
+    mem_limit: 8g
+
+    environment:
+      - MOBSF_ADMIN_USER=${MOBSF_ADMIN_USER}       # set in your .env
+      - MOBSF_ADMIN_PASSWORD=${MOBSF_ADMIN_PASSWORD} # set in your .env
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # Router
+      - "traefik.http.routers.mobsf.rule=Host(`${MOBSF_INTERNAL_HOST}`)"
+      - "traefik.http.routers.mobsf.entrypoints=web"
+      - "traefik.http.routers.mobsf.tls.certresolver=myresolver"
+      # Service port inside container
+      - "traefik.http.services.mobsf.loadbalancer.server.port=8000"
+    ports:
+      - "10900:8000" # optional if you want direct access for testing
