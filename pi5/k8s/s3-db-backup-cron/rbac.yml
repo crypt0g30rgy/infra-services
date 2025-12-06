@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vaultwarden-backup
+  namespace: vaultwarden
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vaultwarden-backup-role
+  namespace: vaultwarden
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "exec"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vaultwarden-backup-rolebinding
+  namespace: vaultwarden
+subjects:
+  - kind: ServiceAccount
+    name: vaultwarden-backup
+    namespace: vaultwarden
+roleRef:
+  kind: Role
+  name: vaultwarden-backup-role
+  apiGroup: rbac.authorization.k8s.io
