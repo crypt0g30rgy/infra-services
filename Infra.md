@@ -2,7 +2,8 @@
 
 ## Current: 2025-12-06T11:37:09.316Z
 
-- raspberry pi5 single node
+- raspberry pi5 single node [16gb]
+- hp amd64 pc [32gb]
 
 ## UpComming
 
