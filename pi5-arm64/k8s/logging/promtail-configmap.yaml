@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: logging
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+    scrape_configs:
+
+    - job_name: kubernetes-pods
+
+      kubernetes_sd_configs:
+      - role: pod
+
+      pipeline_stages:
+      - docker: {}
+      - json:
+          expressions:
+            time: time
+            host: host
+            method: method
+            uri: uri
+            status: status
+            request_time: request_time
+            namespace: namespace
+            ingress_name: ingress_name
+            service_name: service_name
+            cf_country: cf_country
+            cf_connecting_ip: cf_connecting_ip
+
+      relabel_configs:
+
+      # namespace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+
+      # pod name
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+      # container name
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+
+      # node
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+
+      # pod IP
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: pod_ip
+
+      # workload name
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+
+      # deployment
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        target_label: workload
+
+      # controller name
+      - source_labels: [__meta_kubernetes_pod_controller_name]
+        target_label: controller
+
+      # pod UID
+      - source_labels: [__meta_kubernetes_pod_uid]
+        target_label: pod_uid
+
+      # container image
+      - source_labels: [__meta_kubernetes_pod_container_image]
+        target_label: image
+
+      # log file path
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+
+      - replacement: /var/log/pods/*$1/*.log
+        separator: /
+        source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+        target_label: __path__
