@@ -1,23 +1,3 @@
-# apiVersion: v1
-# kind: ConfigMap
-# metadata:
-#   name: nginx-load-balancer-microk8s-conf
-#   namespace: ingress
-# data:
-#   enable-access-log: "true"
-
-#   access-log-path: "/var/log/nginx/access.log"
-#   error-log-path: "/var/log/nginx/error.log"
-
-#   log-format-upstream: |
-#     $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
-#     "$http_referer" "$http_user_agent" "$request_time"
-#     "$upstream_response_time" "$upstream_addr"
-
-#   use-forwarded-headers: "true"
-#   real-ip-header: "CF-Connecting-IP"
-#   set-real-ip-from: "0.0.0.0/0"
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,64 +6,84 @@ metadata:
 data:
   enable-access-log: "true"
 
-  log-format-escape-json: "true"
+  access-log-path: "/var/log/nginx/access.log"
+  error-log-path: "/var/log/nginx/error.log"
 
   log-format-upstream: |
-    {
-      "time": "$time_iso8601",
-
-      "remote_addr": "$remote_addr",
-      "cf_connecting_ip": "$http_cf_connecting_ip",
-      "x_forwarded_for": "$proxy_add_x_forwarded_for",
-
-      "request_id": "$req_id",
-
-      "host": "$host",
-      "server_name": "$server_name",
-      "scheme": "$scheme",
-
-      "method": "$request_method",
-      "uri": "$uri",
-      "request_uri": "$request_uri",
-      "args": "$args",
-      "protocol": "$server_protocol",
-
-      "status": $status,
-      "bytes_sent": $bytes_sent,
-      "request_length": $request_length,
-
-      "request_time": $request_time,
-
-      "upstream_addr": "$upstream_addr",
-      "upstream_status": "$upstream_status",
-      "upstream_response_time": "$upstream_response_time",
-      "upstream_connect_time": "$upstream_connect_time",
-      "upstream_header_time": "$upstream_header_time",
-
-      "namespace": "$namespace",
-      "ingress_name": "$ingress_name",
-      "service_name": "$service_name",
-      "service_port": "$service_port",
-
-      "user_agent": "$http_user_agent",
-      "referer": "$http_referer",
-
-      "connection": "$connection",
-      "connection_requests": "$connection_requests",
-
-      "gzip_ratio": "$gzip_ratio",
-
-      "cf_ray": "$http_cf_ray",
-      "cf_country": "$http_cf_ipcountry",
-      "cf_visitor": "$http_cf_visitor",
-      "cf_cache_status": "$http_cf_cache_status",
-      "cf_request_id": "$http_cf_request_id",
-
-      "cf_ipcity": "$http_cf_ipcity",
-      "cf_iplatitude": "$http_cf_iplatitude",
-      "cf_iplongitude": "$http_cf_iplongitude"
-    }
+    $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
+    "$http_referer" "$http_user_agent" "$request_time"
+    "$upstream_response_time" "$upstream_addr"
 
   use-forwarded-headers: "true"
   real-ip-header: "CF-Connecting-IP"
   set-real-ip-from: "0.0.0.0/0"
+
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: nginx-load-balancer-microk8s-conf
+#   namespace: ingress
+# data:
+#   enable-access-log: "true"
+
+#   log-format-escape-json: "true"
+
+#   log-format-upstream: |
+#     {
+#       "time": "$time_iso8601",
+
+#       "remote_addr": "$remote_addr",
+#       "cf_connecting_ip": "$http_cf_connecting_ip",
+#       "x_forwarded_for": "$proxy_add_x_forwarded_for",
+
+#       "request_id": "$req_id",
+
+#       "host": "$host",
+#       "server_name": "$server_name",
+#       "scheme": "$scheme",
+
+#       "method": "$request_method",
+#       "uri": "$uri",
+#       "request_uri": "$request_uri",
+#       "args": "$args",
+#       "protocol": "$server_protocol",
+
+#       "status": $status,
+#       "bytes_sent": $bytes_sent,
+#       "request_length": $request_length,
+
+#       "request_time": $request_time,
+
+#       "upstream_addr": "$upstream_addr",
+#       "upstream_status": "$upstream_status",
+#       "upstream_response_time": "$upstream_response_time",
+#       "upstream_connect_time": "$upstream_connect_time",
+#       "upstream_header_time": "$upstream_header_time",
+
+#       "namespace": "$namespace",
+#       "ingress_name": "$ingress_name",
+#       "service_name": "$service_name",
+#       "service_port": "$service_port",
+
+#       "user_agent": "$http_user_agent",
+#       "referer": "$http_referer",
+
+#       "connection": "$connection",
+#       "connection_requests": "$connection_requests",
+
+#       "gzip_ratio": "$gzip_ratio",
+
+#       "cf_ray": "$http_cf_ray",
+#       "cf_country": "$http_cf_ipcountry",
+#       "cf_visitor": "$http_cf_visitor",
+#       "cf_cache_status": "$http_cf_cache_status",
+#       "cf_request_id": "$http_cf_request_id",
+
+#       "cf_ipcity": "$http_cf_ipcity",
+#       "cf_iplatitude": "$http_cf_iplatitude",
+#       "cf_iplongitude": "$http_cf_iplongitude"
+#     }
+
+#   use-forwarded-headers: "true"
+#   real-ip-header: "CF-Connecting-IP"
+#   set-real-ip-from: "0.0.0.0/0"
