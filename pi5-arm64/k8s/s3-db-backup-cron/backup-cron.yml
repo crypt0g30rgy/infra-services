@@ -5,8 +5,8 @@ metadata:
   namespace: vaultwarden
 spec:
   schedule: "0 2 * * *"  # daily at 02:00 UTC
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
