@@ -38,20 +38,26 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: echo
-  namespace: default
+  name: echo                       # Name of the Ingress object
+  namespace: default               # Namespace where the Ingress is created
   annotations:
+    # Rewrite the URL path before sending it to the backend service.
+    # This is commonly used when the Ingress path differs from the service path.
     nginx.ingress.kubernetes.io/rewrite-target: /
+
 spec:
+  # The IngressClass to use; ensures this Ingress is handled by the correct controller.
+  # Make sure your NGINX ingress controller defines an IngressClass named 'public'.
   ingressClassName: public
+
   rules:
-  - host: echo.xboy.me
+  - host: echo.example.me           # Public hostname that clients will access
     http:
       paths:
-      - path: /
-        pathType: Prefix
+      - path: /                     # URL path this rule matches
+        pathType: Prefix            # Path matching type: Prefix = match any URL that starts with this path
         backend:
           service:
-            name: echo
+            name: echo              # Target Kubernetes Service to forward requests to
             port:
-              number: 80
+              number: 80            # Port on the Service to forward traffic to
