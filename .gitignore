@@ -2,3 +2,4 @@
 *kube*
 *.log*
 *cred*
+*tls*
