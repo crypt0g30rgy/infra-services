@@ -1,0 +1,18 @@
+# Normalize all text files to LF by default
+* text=auto eol=lf
+
+# Ensure specific scripts always use LF
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Ensure YAML files always use LF
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Ensure MD files always use LF
+*.md text eol=lf
+
+# Windows-specific batch files MUST use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: promtail
-  namespace: logging
+  namespace: monitoring
 spec:
   selector:
     matchLabels:
@@ -15,7 +15,8 @@ spec:
       serviceAccountName: promtail
       containers:
       - name: promtail
-        image: grafana/promtail:2.9.3
+        image: grafana/promtail:3.6.11
+        imagePullPolicy: IfNotPresent
         args:
           - -config.file=/etc/promtail/promtail.yaml
         volumeMounts:

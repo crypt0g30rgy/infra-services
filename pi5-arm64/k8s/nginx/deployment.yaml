@@ -44,7 +44,7 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-  - host: nginx-test.xboy.me
+  - host: nginx-test.example.com
     http:
       paths:
       - path: /

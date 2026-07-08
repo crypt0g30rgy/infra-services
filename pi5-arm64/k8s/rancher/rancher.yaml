@@ -233,7 +233,7 @@ metadata:
   annotations:
 spec:
   rules:
-  - host: pi-rancher.xboy.me  # hostname to access rancher server
+  - host: pi-rancher.example.com  # hostname to access rancher server
     http:
       paths:
       - backend:
@@ -245,7 +245,7 @@ spec:
         path: /
   tls:
   - hosts:
-    - pi-rancher.xboy.me
+    - pi-rancher.example.com
     secretName: tls-rancher-ingress
 ---
 # Source: rancher/templates/post-delete-hook-service-account.yaml

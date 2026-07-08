@@ -1,0 +1,148 @@
+# -----------------------------------------------------------------------------
+# ReplicaSet & Completed Pod Cleanup
+#
+# This CronJob keeps the cluster tidy by:
+#
+# 1. Removing old ReplicaSets that:
+#    - Have 0 desired replicas.
+#    - Are older than 3 days.
+#
+# 2. Removing completed (Succeeded) pods older than 3 days.
+#    This is particularly useful on MicroK8s where helper pods (such as the
+#    hostpath provisioner) are intentionally left behind after completing.
+#
+# The 3-day retention period preserves rollback history while preventing
+# hundreds of obsolete resources from accumulating.
+# -----------------------------------------------------------------------------
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rs-cleaner
+  namespace: kube-system
+
+---
+# Allow listing and deleting ReplicaSets and Pods across all namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rs-cleaner
+rules:
+  - apiGroups: ["apps"]
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - list
+      - delete
+
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - delete
+
+---
+# Bind the permissions to the ServiceAccount.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rs-cleaner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rs-cleaner
+subjects:
+  - kind: ServiceAccount
+    name: rs-cleaner
+    namespace: kube-system
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rs-cleaner
+  namespace: kube-system
+spec:
+  # Run every day at 03:00 UTC.
+  schedule: "0 3 * * *"
+
+  # Never allow overlapping cleanup jobs.
+  concurrencyPolicy: Forbid
+
+  # Keep only the latest completed/failed Job.
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: rs-cleaner
+          restartPolicy: Never
+
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl:latest
+              imagePullPolicy: IfNotPresent
+
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  ################################################################
+                  # Anything older than this timestamp is eligible for cleanup.
+                  ################################################################
+                  cutoff=$(date -u -d "3 days ago" +%s)
+
+                  ################################################################
+                  # Cleanup old ReplicaSets.
+                  #
+                  # Only delete ReplicaSets with zero desired replicas.
+                  # These are no longer serving traffic and exist only for
+                  # Deployment rollback history.
+                  ################################################################
+                  echo "=== Cleaning old ReplicaSets ==="
+
+                  kubectl get rs -A \
+                    -o go-template='{{range .items}}{{.metadata.namespace}}{{"\t"}}{{.metadata.name}}{{"\t"}}{{.spec.replicas}}{{"\t"}}{{.metadata.creationTimestamp}}{{"\n"}}{{end}}' \
+                  | while IFS=$'\t' read -r ns rs replicas created; do
+
+                      # Skip active ReplicaSets.
+                      [ "$replicas" = "0" ] || continue
+
+                      created_epoch=$(date -u -d "$created" +%s)
+
+                      if [ "$created_epoch" -lt "$cutoff" ]; then
+                        echo "Deleting ReplicaSet ${ns}/${rs}"
+                        kubectl delete rs -n "$ns" "$rs"
+                      fi
+                    done
+
+                  ################################################################
+                  # Cleanup completed Pods.
+                  #
+                  # This removes orphaned helper pods left behind by MicroK8s
+                  # (hostpath provisioner, etc.) and any other completed pods
+                  # that no longer serve a purpose.
+                  ################################################################
+                  echo "=== Cleaning completed Pods ==="
+
+                  kubectl get pods -A \
+                    -o go-template='{{range .items}}{{.metadata.namespace}}{{"\t"}}{{.metadata.name}}{{"\t"}}{{.status.phase}}{{"\t"}}{{.metadata.creationTimestamp}}{{"\n"}}{{end}}' \
+                  | while IFS=$'\t' read -r ns pod phase created; do
+
+                      # Only completed pods.
+                      [ "$phase" = "Succeeded" ] || continue
+
+                      created_epoch=$(date -u -d "$created" +%s)
+
+                      if [ "$created_epoch" -lt "$cutoff" ]; then
+                        echo "Deleting completed pod ${ns}/${pod}"
+                        kubectl delete pod -n "$ns" "$pod"
+                      fi
+                    done
+
+                  echo "=== Cleanup complete ==="

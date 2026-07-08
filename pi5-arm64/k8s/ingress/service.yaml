@@ -3,6 +3,11 @@ kind: Service
 metadata:
   name: nginx-ingress
   namespace: ingress
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "10254"
+    prometheus.io/path: "/metrics"
+    prometheus.io/scheme: "http"
 spec:
   selector:
     name: nginx-ingress-microk8s
@@ -11,8 +16,15 @@ spec:
       protocol: TCP
       port: 80
       targetPort: 80
+
     - name: https
       protocol: TCP
       port: 443
       targetPort: 443
+
+    - name: metrics
+      protocol: TCP
+      port: 10254
+      targetPort: 10254
+
   type: ClusterIP
