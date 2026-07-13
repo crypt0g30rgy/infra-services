@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildkit-cache-pvc
+  namespace: jenkins
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      # Docker layer cache can grow quickly with multiple images/branches.
+      # Size this to your image sizes and branch/tag churn.
+      storage: 10Gi
+
+# --- # for sanity... build a multi arch jenkins ci builder
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: kustomize-cache-pvc
+#   namespace: jenkins
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: microk8s-hostpath
+#   resources:
+#     requests:
+#       # Just holds a single ~50-70MB binary.
+#       storage: 256Mi   

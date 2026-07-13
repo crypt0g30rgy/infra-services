@@ -17,11 +17,11 @@ spec:
 
       containers:
       - name: jenkins
-        image: jenkins/jenkins:2.571
+        image: jenkins/jenkins:2.572
 
         ports:
         - containerPort: 8080
-        - containerPort: 50000
+        # - containerPort: 50000
 
         resources:
           requests:
@@ -35,22 +35,7 @@ spec:
         - name: jenkins-home
           mountPath: /var/jenkins_home
 
-      - name: docker
-        image: docker:28-cli
-        command:
-        - sleep
-        - infinity
-
-        volumeMounts:
-        - name: docker-sock
-          mountPath: /var/run/docker.sock
-
       volumes:
       - name: jenkins-home
         persistentVolumeClaim:
           claimName: jenkins-home
-
-      - name: docker-sock
-        hostPath:
-          path: /var/run/docker.sock
-          type: Socket

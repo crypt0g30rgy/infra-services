@@ -27,6 +27,7 @@ newgrp microk8s
 ### Essential Addons
 
 ```bash
+microk8s enable rbac
 microk8s enable dns storage
 ```
 

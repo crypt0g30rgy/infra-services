@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: ingress
+data:
+  traefik.yaml: |
+    accessLog:
+      filePath: /var/log/traefik/access.log
+      format: json
+      filters:
+        statusCodes:
+          - "400-499"
+          - "500-599"
+        retryAttempts: true
+        minDuration: "10ms"
+      fields:
+        defaultMode: keep
+        names:
+          ClientUsername: drop
+        headers:
+          defaultMode: keep
+          names:
+            User-Agent: keep
+            Authorization: drop
+            Cookie: drop
+
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addRoutersLabels: true
+        addServicesLabels: true
+        buckets:
+          - 0.1
+          - 0.3
+          - 1.2
+          - 5.0
+        entryPoint: metrics
+
+    tracing:
+      otlp:
+        grpc:
+          endpoint: jaeger.observability.svc.cluster.local:4317
+          insecure: true
+
+    entryPoints:
+      web:
+        address: :80
+      websecure:
+        address: :443
+      metrics:
+        address: :8082
+
+    providers:
+      kubernetesCRD: {}
+      kubernetesIngress: {}
+
+    api:
+      dashboard: true
+      insecure: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-metrics
+  namespace: ingress
+  labels:
+    app: traefik
+spec:
+  ports:
+    - name: metrics
+      port: 8082
+      targetPort: 8082
+  selector:
+    app.kubernetes.io/name: traefik
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: traefik
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: traefik
+  namespaceSelector:
+    matchNames:
+      - ingress
+  endpoints:
+    - port: metrics
+      interval: 15s
