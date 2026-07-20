@@ -1,134 +1,241 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aws-credentials
-  namespace: vaultwarden
-type: Opaque
-stringData:
-  AWS_ACCESS_KEY_ID: <your-access-key>
-  AWS_SECRET_ACCESS_KEY: <your-secret-key>
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: s3-backup-env
+#   namespace: vaultwarden
+# type: Opaque
+# stringData:
+#   AWS_ACCESS_KEY_ID: "AKIA34BAGDIHYYBHR3SP"
+#   AWS_SECRET_ACCESS_KEY: "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"
+#   AWS_REGION: "eu-west-1"
+#   S3_BUCKET: "secrets-and-backups"
+#   RETENTION_DAYS: "14"
+
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vaultwarden-s3-backup
+  name: vaultwarden-backup-script
   namespace: vaultwarden
 data:
   backup.sh: |
-    #!/bin/sh
-    set -eu
+        #!/usr/bin/env bash
+        set -euo pipefail
 
-    # Configuration
-    SRC_DIR="/data"
-    TMP_DIR="/tmp"
-    BUCKET="${S3_BUCKET}"
-    PREFIX="${S3_PREFIX}"
-    DATE="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
-    BACKUP="vaultwarden-${DATE}.tar.gz"
+        TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 
-    mkdir -p "${TMP_DIR}"
+        WORKDIR="/tmp/backup"
+        mkdir -p "${WORKDIR}"
 
-    echo "Creating compressed archive..."
-    tar -czf "${TMP_DIR}/${BACKUP}" -C "${SRC_DIR}" .
+        DB_BACKUP="vaultwarden-db-${TIMESTAMP}.sql.gz"
+        DATA_BACKUP="vaultwarden-data-${TIMESTAMP}.tar.gz"
 
-    echo "Uploading to s3://${BUCKET}/${PREFIX}/${BACKUP}"
-    aws s3 cp \
-      "${TMP_DIR}/${BACKUP}" \
-      "s3://${BUCKET}/${PREFIX}/${BACKUP}"
 
-    echo "Cleaning local archive..."
-    rm -f "${TMP_DIR}/${BACKUP}"
+        echo "[1/8] PostgreSQL backup"
 
-    echo "Removing backups older than 7 days while keeping at least 2..."
+        DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres.vaultwarden.svc.cluster.local:5432/${POSTGRES_DB}"
 
-    FILES=$(aws s3api list-objects-v2 \
-      --bucket "${BUCKET}" \
-      --prefix "${PREFIX}/" \
-      --query 'reverse(sort_by(Contents,&LastModified))[].Key' \
-      --output text)
+        export PGPASSWORD="${POSTGRES_PASSWORD}"
 
-    COUNT=0
-    NOW=$(date -u +%s)
+        pg_dump \
+          --dbname="${DATABASE_URL}" \
+          -F c \
+          | gzip > "${WORKDIR}/${DB_BACKUP}"
 
-    for KEY in $FILES; do
-      COUNT=$((COUNT+1))
 
-      # Always retain the two newest backups
-      if [ "$COUNT" -le 2 ]; then
-        continue
-      fi
+        echo "[2/8] Vaultwarden data backup"
 
-      LAST_MODIFIED=$(aws s3api head-object \
-        --bucket "${BUCKET}" \
-        --key "${KEY}" \
-        --query LastModified \
-        --output text)
+        tar \
+          -czf "${WORKDIR}/${DATA_BACKUP}" \
+          -C /data .
 
-      LAST_EPOCH=$(date -u -d "${LAST_MODIFIED}" +%s)
-      AGE_DAYS=$(( (NOW - LAST_EPOCH) / 86400 ))
 
-      if [ "$AGE_DAYS" -gt 7 ]; then
-        echo "Deleting ${KEY} (${AGE_DAYS} days old)"
-        aws s3 rm "s3://${BUCKET}/${KEY}"
-      fi
-    done
+        echo "[3/8] Creating checksums"
 
-    echo "Backup complete."
+        sha256sum \
+          "${WORKDIR}/${DB_BACKUP}" \
+          > "${WORKDIR}/${DB_BACKUP}.sha256"
+
+
+        sha256sum \
+          "${WORKDIR}/${DATA_BACKUP}" \
+          > "${WORKDIR}/${DATA_BACKUP}.sha256"
+
+
+
+        echo "[4/8] Uploading database backup"
+
+        aws s3 cp \
+          "${WORKDIR}/${DB_BACKUP}" \
+          "s3://${S3_BUCKET}/${S3_PATH}/${DB_BACKUP}"
+
+        aws s3 cp \
+          "${WORKDIR}/${DB_BACKUP}.sha256" \
+          "s3://${S3_BUCKET}/${S3_PATH}/${DB_BACKUP}.sha256"
+
+
+
+        echo "[5/8] Uploading data backup"
+
+        aws s3 cp \
+          "${WORKDIR}/${DATA_BACKUP}" \
+          "s3://${S3_BUCKET}/${S3_PATH}/${DATA_BACKUP}"
+
+        aws s3 cp \
+          "${WORKDIR}/${DATA_BACKUP}.sha256" \
+          "s3://${S3_BUCKET}/${S3_PATH}/${DATA_BACKUP}.sha256"
+
+
+
+        echo "[6/8] Retention cleanup"
+
+
+        for PREFIX in vaultwarden-db vaultwarden-data; do
+
+          mapfile -t FILES < <(
+            aws s3api list-objects-v2 \
+              --bucket "${S3_BUCKET}" \
+              --prefix "${S3_PATH}/${PREFIX}-" \
+              --query 'Contents[].Key' \
+              --output text \
+              | grep -E "\.(gz)$" \
+              | sort -r
+          )
+
+
+          COUNT=0
+
+          for FILE in "${FILES[@]}"; do
+
+            COUNT=$((COUNT+1))
+
+
+            # Always keep newest two
+            if [ "${COUNT}" -le 2 ]; then
+              continue
+            fi
+
+
+            FILE_DATE=$(echo "${FILE}" \
+              | sed -E 's/.*-[0-9]{8}T[0-9]{6}Z.*/\0/')
+
+
+            OBJECT_DATE=$(aws s3api head-object \
+              --bucket "${S3_BUCKET}" \
+              --key "${FILE}" \
+              --query LastModified \
+              --output text)
+
+
+            OBJECT_TS=$(date -d "${OBJECT_DATE}" +%s)
+
+            LIMIT=$(date -d "-${RETENTION_DAYS} days" +%s)
+
+
+            if [ "${OBJECT_TS}" -lt "${LIMIT}" ]; then
+
+              echo "Deleting ${FILE}"
+
+              aws s3 rm \
+                "s3://${S3_BUCKET}/${FILE}"
+
+              aws s3 rm \
+                "s3://${S3_BUCKET}/${FILE}.sha256" \
+                || true
+
+            fi
+
+          done
+
+        done
+
+
+
+        echo "[7/8] Cleanup"
+
+        rm -rf "${WORKDIR}"
+
+
+        echo "[8/8] Backup completed successfully"
+
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: vaultwarden-s3-backup
+  name: vaultwarden-backup
   namespace: vaultwarden
 spec:
   schedule: "0 0 * * *"
   timeZone: "Etc/UTC"
   concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
-
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
         spec:
-          restartPolicy: OnFailure
-
+          restartPolicy: Never
           containers:
-            - name: backup
-              image: amazon/aws-cli:2.36.2
-              imagePullPolicy: IfNotPresent
+          - name: backup
+            image: ghcr.io/your-org/vaultwarden-backup:1.0.0
+            imagePullPolicy: IfNotPresent
+            command:
+              - /scripts/backup.sh
+            env:
+            # aws s3 configuration
+            - name: AWS_REGION
+              value: "eu-west-1"
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: s3-backup-env
+                  key: S3_BUCKET
+            - name: S3_PATH
+              value: "vault-auto-backups"
+            - name: RETENTION_DAYS
+              value: "14"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s3-backup-env
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-backup-env
+                  key: AWS_SECRET_ACCESS_KEY
+              # postgress configuration
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: vaultwarden-secret
+                  key: POSTGRES_DB
+            - name: DATABASE_URL
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.vaultwarden.svc.cluster.local:5432/$(POSTGRES_DB)"
 
-              command:
-                - /bin/sh
-                - /scripts/backup.sh
-
-              env:
-                - name: AWS_REGION
-                  value: eu-west-1
-                - name: S3_BUCKET
-                  value: bucket
-                - name: S3_PREFIX
-                  value: path-to-upload
-
-              envFrom:
-                - secretRef:
-                    name: aws-credentials
-
-              volumeMounts:
-                - name: vaultwarden-data
-                  mountPath: /data
-                  readOnly: true
-
-                - name: backup-script
-                  mountPath: /scripts
-                  readOnly: true
+            volumeMounts:
+            - name: vaultwarden-data
+              mountPath: /data
+              readOnly: true
+            - name: backup-script
+              mountPath: /scripts
+              readOnly: true
 
           volumes:
-            - name: vaultwarden-data
-              persistentVolumeClaim:
-                claimName: vaultwarden-data
-
-            - name: backup-script
-              configMap:
-                name: vaultwarden-s3-backup
-                defaultMode: 0755
+          - name: vaultwarden-data
+            persistentVolumeClaim:
+              claimName: vaultwarden-data
+          - name: backup-script
+            configMap:
+              name: vaultwarden-backup-script
+              defaultMode: 0755
