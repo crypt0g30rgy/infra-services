@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+  namespace: vaultwarden
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: <your-access-key>
+  AWS_SECRET_ACCESS_KEY: <your-secret-key>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vaultwarden-s3-backup
+  namespace: vaultwarden
+data:
+  backup.sh: |
+    #!/bin/sh
+    set -eu
+
+    # Configuration
+    SRC_DIR="/data"
+    TMP_DIR="/tmp"
+    BUCKET="${S3_BUCKET}"
+    PREFIX="${S3_PREFIX}"
+    DATE="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+    BACKUP="vaultwarden-${DATE}.tar.gz"
+
+    mkdir -p "${TMP_DIR}"
+
+    echo "Creating compressed archive..."
+    tar -czf "${TMP_DIR}/${BACKUP}" -C "${SRC_DIR}" .
+
+    echo "Uploading to s3://${BUCKET}/${PREFIX}/${BACKUP}"
+    aws s3 cp \
+      "${TMP_DIR}/${BACKUP}" \
+      "s3://${BUCKET}/${PREFIX}/${BACKUP}"
+
+    echo "Cleaning local archive..."
+    rm -f "${TMP_DIR}/${BACKUP}"
+
+    echo "Removing backups older than 7 days while keeping at least 2..."
+
+    FILES=$(aws s3api list-objects-v2 \
+      --bucket "${BUCKET}" \
+      --prefix "${PREFIX}/" \
+      --query 'reverse(sort_by(Contents,&LastModified))[].Key' \
+      --output text)
+
+    COUNT=0
+    NOW=$(date -u +%s)
+
+    for KEY in $FILES; do
+      COUNT=$((COUNT+1))
+
+      # Always retain the two newest backups
+      if [ "$COUNT" -le 2 ]; then
+        continue
+      fi
+
+      LAST_MODIFIED=$(aws s3api head-object \
+        --bucket "${BUCKET}" \
+        --key "${KEY}" \
+        --query LastModified \
+        --output text)
+
+      LAST_EPOCH=$(date -u -d "${LAST_MODIFIED}" +%s)
+      AGE_DAYS=$(( (NOW - LAST_EPOCH) / 86400 ))
+
+      if [ "$AGE_DAYS" -gt 7 ]; then
+        echo "Deleting ${KEY} (${AGE_DAYS} days old)"
+        aws s3 rm "s3://${BUCKET}/${KEY}"
+      fi
+    done
+
+    echo "Backup complete."
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vaultwarden-s3-backup
+  namespace: vaultwarden
+spec:
+  schedule: "0 0 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+            - name: backup
+              image: amazon/aws-cli:2.36.2
+              imagePullPolicy: IfNotPresent
+
+              command:
+                - /bin/sh
+                - /scripts/backup.sh
+
+              env:
+                - name: AWS_REGION
+                  value: eu-west-1
+                - name: S3_BUCKET
+                  value: bucket
+                - name: S3_PREFIX
+                  value: path-to-upload
+
+              envFrom:
+                - secretRef:
+                    name: aws-credentials
+
+              volumeMounts:
+                - name: vaultwarden-data
+                  mountPath: /data
+                  readOnly: true
+
+                - name: backup-script
+                  mountPath: /scripts
+                  readOnly: true
+
+          volumes:
+            - name: vaultwarden-data
+              persistentVolumeClaim:
+                claimName: vaultwarden-data
+
+            - name: backup-script
+              configMap:
+                name: vaultwarden-s3-backup
+                defaultMode: 0755
