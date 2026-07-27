@@ -1,0 +1,63 @@
+# For configuration options and examples, please see:
+# https://gethomepage.dev/configs/services/
+
+- DEVELOPMENT:
+    - TDI-GIT:
+        icon: mdi-github
+        href: https://github.com/tesseractdigitalinnovations
+        description: Organisation Github
+
+    - ME-GIT:
+        icon: mdi-github
+        href: https://github.com/crypt0g30rgy
+        description: My Github
+
+- BLOG & WEBSITE:
+    - root:
+        icon: mdi-nodejs
+        href: https://xboy.me
+        description: My cool website
+    - blog:
+        icon: mdi-rss
+        href: https://blog.xboy.me
+        description: My personal blog
+
+- SELF-HOSTED SERVICES:
+    - homepage:
+        icon: mdi-home
+        href: https://home.pi-zone.internal.local-dev.xboy.me
+        description: My Homelab homepage
+    - grafana:
+        icon: mdi-chart-line
+        href: https://grafana.pi-zone.internal.local-dev.xboy.me
+        description: Grafana dashboards
+    - gitea:
+        icon: mdi-source-repository
+        href: https://gitea.pi-zone.internal.local-dev.xboy.me
+        description: Gitea git server
+    - jenkins:
+        icon: mdi-jenkins
+        href: https://jenkins.pi-zone.internal.local-dev.xboy.me
+        description: Jenkins CI/CD server
+    - pihole:
+        icon: mdi-pihole
+        href: https://pihole.pi-zone.internal.local-dev.xboy.me/admin
+        description: Pi-hole ad blocker and DNS server
+    - portainer:
+        icon: mdi-portainer
+        href: https://portainer.pi-zone.internal.local-dev.xboy.me
+        description: Portainer container management UI
+    - traefik:
+        icon: mdi-traefik
+        href: https://traefik.pi-zone.internal.local-dev.xboy.me/dashboard/
+        description: Traefik reverse proxy and dashboard
+    - vaultwarden:
+        icon: mdi-vault
+        href: https://vault.pi-zone.internal.local-dev.xboy.me
+        description: Vaultwarden password manager
+
+- CONTACT:
+    - email:
+        icon: mdi-email
+        href: mailto:example@example.com
+        description: Contact me via email

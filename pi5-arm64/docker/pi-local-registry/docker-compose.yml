@@ -1,20 +1,20 @@
-
-version: "3.8"
-
 networks:
   internal:
     external: true
 
 services:
   registry:
-    image: registry:2
+    image: registry:3.1.1
     container_name: local-registry
     restart: unless-stopped
     networks:
       - internal
+    ports:
+      - 5000:5000
     volumes:
       - ./data:/var/lib/registry
-      - ./config.yml:/etc/docker/registry/config.yml
+      - ./config.yml:/etc/docker/registry/config.yml:ro
+      - ./.passwd:/etc/docker/registry/htpasswd:ro
     command: ["registry", "serve", "/etc/docker/registry/config.yml"]
     labels:
       - "traefik.enable=true"
@@ -25,7 +25,7 @@ services:
       - "traefik.http.routers.registry-internal.rule=Host(`${REGISTRY_INTERNAL_HOST}`)"
       - "traefik.http.routers.registry-internal.entrypoints=websecure"
       - "traefik.http.routers.registry-internal.tls=true"
-      - "traefik.http.routers.registry-internal.middlewares=registry-auth"
+      # - "traefik.http.routers.registry-internal.middlewares=registry-auth"
       - "traefik.http.routers.registry-internal.tls.certresolver=myresolver"
 
       # --------------------------
@@ -33,18 +33,19 @@ services:
       # --------------------------
       - "traefik.http.routers.registry-external.rule=Host(`${REGISTRY_EXTERNAL_HOST}`)"
       - "traefik.http.routers.registry-external.entrypoints=websecure"
-      - "traefik.http.routers.registry-external.tls.certresolver=myresolver"
-      - "traefik.http.routers.registry-external.middlewares=registry-auth" # ✅ Add authentication middleware
+      # - "traefik.http.routers.registry-external.tls.certresolver=myresolver" # disabled since cf tunnel currenly handles that
+      # - "traefik.http.routers.registry-external.middlewares=registry-auth" # ✅ Add authentication middleware
 
       # --------------------------
       # Basic Auth Middleware (shared)
       # --------------------------
-      - "traefik.http.middlewares.registry-auth.basicauth.users=${REGISTRY_AUTH}"
+      # - "traefik.http.middlewares.registry-auth.basicauth.users=${REGISTRY_AUTH}"
 
       # --------------------------
       # Shared Service
       # --------------------------
       - "traefik.http.services.registry-internal.loadbalancer.server.port=5000"
+
     deploy:
       resources:
         limits:
@@ -54,32 +55,89 @@ services:
           cpus: "0.12"
           memory: 128M
 
-  registry-cleaner:
-    image: alpine:3.19
-    container_name: registry-cleaner
-    depends_on:
-      - registry
+  registry-ui:
+    image: joxit/docker-registry-ui:main
+    container_name: registry-ui
+    restart: unless-stopped
     networks:
       - internal
-    volumes:
-      - ./cleanup-registry.sh:/cleanup.sh
-      - ./config.yml:/etc/docker/registry/config.yml
-      - /var/run/docker.sock:/var/run/docker.sock
-    entrypoint: >
-      sh -c "
-      apk add --no-cache curl jq bash docker-cli &&
-      while true; do
-        echo 'Running registry cleanup';
-        bash /cleanup.sh &&
-        docker exec local-registry registry garbage-collect /etc/docker/registry/config.yml;
-        sleep 86400;
-      done"
-    restart: unless-stopped
+    ports:
+      - "5005:80"
+    environment:
+      REGISTRY_TITLE: Local Docker Registry
+      # REGISTRY_URL: http://192.168.1.59:5000
+      SINGLE_REGISTRY: "true"
+      DELETE_IMAGES: "true"
+      CATALOG_ELEMENTS_LIMIT: 1000
+      TAGLIST_PAGE_SIZE: 100
+      NGINX_PROXY_PASS_URL: http://local-registry:5000
+    depends_on:
+      - registry
+    labels:
+      - "traefik.enable=true"
+
+      # --------------------------
+      # Internal Router
+      # --------------------------
+      - "traefik.http.routers.registry-ui-internal.rule=Host(`${REGISTRY_UI_INTERNAL_HOST}`)"
+      - "traefik.http.routers.registry-ui-internal.entrypoints=websecure"
+      - "traefik.http.routers.registry-ui-internal.tls=true"
+      # - "traefik.http.routers.registry-ui-internal.middlewares=registry-auth"
+      - "traefik.http.routers.registry-ui-internal.tls.certresolver=myresolver"
+
+      # --------------------------
+      # External Router
+      # --------------------------
+      - "traefik.http.routers.registry-ui-external.rule=Host(`${REGISTRY_UI_EXTERNAL_HOST}`)"
+      - "traefik.http.routers.registry-ui-external.entrypoints=websecure"
+      # - "traefik.http.routers.registry-ui-external.tls.certresolver=myresolver"
+      # - "traefik.http.routers.registry-ui-external.middlewares=registry-auth" # ✅ Add authentication middleware
+
+      # --------------------------
+      # Basic Auth Middleware (shared)
+      # --------------------------
+      # - "traefik.http.middlewares.registry-ui-auth.basicauth.users=${REGISTRY_AUTH}"
+
+      # --------------------------
+      # Shared Service
+      # --------------------------
+      - "traefik.http.services.registry-ui-internal.loadbalancer.server.port=80"
+
     deploy:
       resources:
         limits:
           cpus: "0.25"
           memory: 128M
         reservations:
-          cpus: "0.12"
-          memory: 56M
+          cpus: "0.10"
+          memory: "64M"
+
+  # registry-cleaner:
+  #   image: alpine:3.24
+  #   container_name: registry-cleaner
+  #   depends_on:
+  #     - registry
+  #   networks:
+  #     - internal
+  #   volumes:
+  #     - ./cleanup-registry.sh:/cleanup.sh
+  #     - ./config.yml:/etc/docker/registry/config.yml
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   entrypoint: >
+  #     sh -c "
+  #     apk add --no-cache curl jq bash docker-cli &&
+  #     while true; do
+  #       echo 'Running registry cleanup';
+  #       bash /cleanup.sh &&
+  #       docker exec local-registry registry garbage-collect /etc/docker/registry/config.yml;
+  #       sleep 86400;
+  #     done"
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.25"
+  #         memory: 128M
+  #       reservations:
+  #         cpus: "0.12"
+  #         memory: 56M

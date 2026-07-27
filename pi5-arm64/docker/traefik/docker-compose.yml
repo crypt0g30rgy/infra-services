@@ -1,5 +1,3 @@
-version: "3.8"
-
 networks:
   proxy:
     external: true # or comment this line to auto create the network create with: docker network create proxy
@@ -10,10 +8,10 @@ networks:
 
 services:
   traefik:
-    image: traefik:v3.6.2
+    image: traefik:v3.7.9
     container_name: traefik
     restart: unless-stopped
-    
+
     security_opt:
       - no-new-privileges:true # helps to increase security
     env_file:
@@ -21,8 +19,8 @@ services:
     command:
       - "--configFile=/traefik.yml"
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
       - "11000:8080" # <- Traefik Dashboard Port
     environment:
       - TRAEFIK_DASHBOARD_CREDENTIALS=${TRAEFIK_DASHBOARD_CREDENTIALS} # <- set this in your .env file e.g admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/ which is admin:password
@@ -55,20 +53,9 @@ services:
       - "traefik.http.routers.traefik.priority=10" # <- set a high priority to avoid conflicts with other routers
       - "traefik.http.routers.whoami.tls.domains[0].main=${DOMAIN}" # <- main domain for the certificate
       - "traefik.http.routers.whoami.tls.domains[0].sans=${WILDCARD_DOMAIN}" # <- wildcard domain for the certificate
-      
+
       # Consolidated Dashboard Router
-      - "traefik.http.routers.dashboard.rule=Host(`dashboard.local`)"
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.local.xboy.me`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
-      - "traefik.http.routers.dashboard.middlewares=host-scraper"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.mainHost=dashboard.local"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.pathPrefix=/"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.pihole=pihole.local"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.grafana=${GRAFANA_INTERNAL_HOST}"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.portainer=${PORTAINER_INTERNAL_HOST}"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.jenkins=${JENKINS_INTERNAL_HOST}"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.gitea=${GITEA_INTERNAL_HOST}"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.serviceMap.registry=${REGISTRY_INTERNAL_HOST}"
-      - "traefik.http.middlewares.host-scraper.plugin.host-scraper.stripPrefix=true"
       - "traefik.http.routers.dashboard.service=noop@internal"
-      

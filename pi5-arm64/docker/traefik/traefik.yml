@@ -22,7 +22,7 @@ entryPoints:
         idleTimeout: "300s"
         readTimeout: "300s"
         writeTimeout: "300s"
-        
+
 providers:
   docker:
     exposedByDefault: false
@@ -34,12 +34,12 @@ certificatesResolvers:
   myresolver:
     acme:
       storage: /letsencrypt/acme.json
-      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory # Use staging for testing
+#      caServer: https://acme-staging-v02.api.letsencrypt.org/directory # Use staging for testing
       # Uncomment the line below to use Let's Encrypt production environment
       caServer: https://acme-v02.api.letsencrypt.org/directory
       dnsChallenge:
         provider: cloudflare # change as required
-        # disablePropagationCheck: true # Some people using Cloudflare note this can solve DNS propagation issues.
+#        disablePropagationCheck: true # Some people using Cloudflare note this can solve DNS propagation issues.
         resolvers:
           - "1.1.1.1:53"
           - "1.0.0.1:53"

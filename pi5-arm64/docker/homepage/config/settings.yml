@@ -1,0 +1,6 @@
+title: "My Homelab"
+favicon: "https://raw.githubusercontent.com/gethomepage/homepage/main/public/favicon.ico"
+logo: "https://raw.githubusercontent.com/gethomepage/homepage/main/public/logo.png"
+description: "Welcome to my homelab! Here you'll find links to all my self-hosted services and projects."
+theme: "dark"
+background: "https://raw.githubusercontent.com/gethomepage/homepage/main/public/background.jpg"

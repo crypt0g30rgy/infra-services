@@ -5,42 +5,89 @@ networks:
     external: true
 
 services:
+  # ---------- Database ----------
   gitea-db:
     image: mariadb:11
     container_name: gitea-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}  # set this in your .env file
-      MYSQL_DATABASE: ${DB_DATABASE}      # set this in your .env file
-      MYSQL_USER: $DB_USER}              # set this in your .env file
-      MYSQL_PASSWORD: ${DB_PASSWORD}  # set this in your .env file
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_DATABASE}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./data/db:/var/lib/mysql
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 512M
 
+  # ---------- Gitea ----------
   gitea:
-    image: gitea/gitea:latest
+    image: gitea/gitea:1.25
     container_name: gitea
     restart: unless-stopped
     environment:
       USER_UID: 1000
       USER_GID: 1000
-      DB_TYPE: ${DB_TYPE}  # set this in your .env file, e.g mysql
-      DB_HOST: ${DB_HOST}
-      DB_NAME: ${DB_DATABASE}  # set this in your .env file
-      DB_USER: ${DB_USER}  # set this in your .env file
-      DB_PASSWD: ${DB_PASSWORD}  # set this in your .env file
-      ROOT_URL: http://${GITEA_INTERNAL_HOST}   # change to your domain
+      DB_TYPE: mysql
+      DB_HOST: gitea-db:3306
+      DB_NAME: ${DB_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWD: ${DB_PASSWORD}
+      ROOT_URL: http://${GITEA_INTERNAL_HOST:-localhost:10000}
     volumes:
       - ./data/gitea:/data
-#    ports:
-#      - "3000:3000"   # web UI
-#      - "222:22"      # SSH for git
+    ports:
+      - "10000:3000"
     depends_on:
       - gitea-db
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # ---------- Gitea Runner ----------
+  gitea-runner:
+    image: gitea/act_runner:0.2.13
+    container_name: gitea-runner
+    restart: unless-stopped
+    environment:
+      GITEA_INSTANCE_URL: http://${GITEA_INSTANCE_URL:-192.168.0.59:10000}
+      GITEA_RUNNER_NAME: "docker-gitea-runner"
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_TOKEN} # generated from Gitea UI
+      GITEA_RUNNER_WORKDIR: "/tmp/runner"
+      GITEA_RUNNER_LABELS: "ubuntu-latest:docker://node:16-bullseye,ubuntu-22.04:docker://node:16-bullseye,ubuntu-20.04:docker://node:16-bullseye,ubuntu-18.04:docker://node:16-buster"
+      # GITEA_RUNNER_EPHEMERAL: 1
+    volumes:
+      - ./config.yaml:/config.yaml
+      - ./data/runner:/tmp/runner
+      - /var/run/docker.sock:/var/run/docker.sock # optional, allows docker jobs
+    depends_on:
+      - gitea
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+        reservations:
+          cpus: "1"
+          memory: 1024M
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.gitea.rule=Host(`${GITEA_INTERNAL_HOST}`)" # <- change to your domain
