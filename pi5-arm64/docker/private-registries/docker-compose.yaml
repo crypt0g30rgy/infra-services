@@ -1,0 +1,37 @@
+# docker-compose.yml
+# version: '3.8'
+networks:
+  proxy:
+    external: true
+  ci-cd:
+    external: true
+
+services:
+  verdaccio:
+    image: verdaccio/verdaccio:6
+    container_name: npm_server
+    ports:
+      - "4873:4873"
+    volumes:
+      - ./verdaccio-storage:/verdaccio/storage
+      - ./verdaccio-plugins:/verdaccio/plugins
+      - ./verdaccio-conf/config.yml:/verdaccio/conf/config.yml
+    environment:
+      - VERDACCIO_PORT=4873
+    restart: unless-stopped
+    networks:
+      - proxy
+
+  pypi-server:
+    image: pypiserver/pypiserver:latest
+    container_name: pip_server
+    ports:
+      - "4874:8080"
+    volumes:
+      - ./pip-auth:/data/auth
+      - ./pip-packages:/data/packages
+#    command: run -P . -a . /data/packages
+    command: run -P /data/auth/.htpasswd -a update,download,list /data/packages
+    restart: unless-stopped
+    networks:
+      - proxy

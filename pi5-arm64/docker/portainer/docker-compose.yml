@@ -4,7 +4,7 @@ name: portainer  # 👈 Ensures consistent project name
 
 services:
   portainer:
-    image: portainer/portainer-ce:2.33.2-alpine
+    image: portainer/portainer-ce:2.39.5-alpine
     container_name: portainer
     restart: unless-stopped
     ports:

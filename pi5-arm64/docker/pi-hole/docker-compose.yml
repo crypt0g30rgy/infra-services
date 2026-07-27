@@ -42,7 +42,7 @@ services:
     # cap_drop:
     #   - ALL                                     # drop all capabilities
     volumes:
-      - ./unbound:/opt/unbound/etc/unbound:ro
+      - ./unbound:/opt/unbound/etc/unbound
     # security_opt:
     #   - no-new-privileges:true
     #   - seccomp:unconfined

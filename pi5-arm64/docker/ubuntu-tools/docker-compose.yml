@@ -3,13 +3,18 @@ version: "3.8"
 networks:
   internal:
     external: true   # use the same network your Drone stack is already on
+  proxy:
+    external: true
 
 services:
   ubuntu-tools:
-    image: ubuntu-tools:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: ubuntu-tools
     networks:
       - internal
+      - proxy
     tty: true
     stdin_open: true
     command: sleep infinity
