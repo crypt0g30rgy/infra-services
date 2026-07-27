@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: ingress
+  labels:
+    app: traefik
+    app.kubernetes.io/name: traefik
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: traefik
+      app.kubernetes.io/name: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+        app.kubernetes.io/name: traefik
+    spec:
+      serviceAccountName: traefik
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 65532
+      initContainers:
+        - name: init-dirs
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /data/logs /data/acme
+              chown -R 65532:65532 /data
+              chmod 700 /data/acme
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: traefik
+          image: traefik:v3.7.9
+          args:
+            - --configfile=/etc/traefik/traefik.yaml
+          env:
+            - name: CF_DNS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-api-token
+                  key: token
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+            - name: metrics
+              containerPort: 8082
+            - name: dashboard
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/traefik
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+
+        - name: logrotate
+          image: alpine:3.24
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache logrotate >/dev/null 2>&1
+              cat > /etc/logrotate.conf <<'EOF'
+              /data/logs/access.log {
+                su 65532 65532
+                rotate 30
+                missingok
+                nocompress
+                copytruncate
+                daily
+                maxsize 100M
+              }
+              EOF
+              while true; do
+                logrotate -f /etc/logrotate.conf --state /tmp/logrotate.state
+                sleep 86400
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: config
+          configMap:
+            name: traefik-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: traefik-data

@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: ingress
+data:
+  traefik.yaml: |
+    log:
+      level: INFO
+      format: json
+
+    accessLog:
+      filePath: /data/logs/access.log
+      format: json
+      bufferingSize: 100
+      filters:
+        statusCodes:
+          - "400-599"
+        retryAttempts: true
+        minDuration: "10ms"
+      fields:
+        defaultMode: keep
+        names:
+          ClientUsername: drop
+        headers:
+          defaultMode: drop
+          names:
+            User-Agent: keep
+            X-Forwarded-For: keep
+            X-Request-Id: keep
+            Authorization: drop
+            Cookie: drop
+
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addRoutersLabels: true
+        addServicesLabels: true
+        buckets:
+          - 0.1
+          - 0.3
+          - 1.2
+          - 5.0
+        entryPoint: metrics
+
+    tracing:
+      otlp:
+        grpc:
+          endpoint: jaeger.observability.svc.cluster.local:4317
+          insecure: true
+
+    ping:
+      entryPoint: traefik
+      terminatingStatusCode: 204
+
+    entryPoints:
+      web:
+        address: :80
+      websecure:
+        address: :443
+      metrics:
+        address: :8082
+      traefik:
+        address: :8080
+
+    providers:
+      kubernetesCRD:
+        ingressClass: internal
+        allowCrossNamespace: true
+      kubernetesIngress:
+        ingressClass: internal
+        allowExternalNameServices: true
+
+    certificatesResolvers:
+      letsencrypt-internal:
+        acme:
+          storage: /data/acme/acme.json
+          dnsChallenge:
+            provider: cloudflare
+            resolvers:
+              - "1.1.1.1:53"
+              - "1.0.0.1:53"
+
+    api:
+      dashboard: true
+      insecure: true
