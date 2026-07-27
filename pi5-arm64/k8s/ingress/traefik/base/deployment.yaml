@@ -15,7 +15,6 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: traefik
       app.kubernetes.io/name: traefik
   template:
     metadata:
