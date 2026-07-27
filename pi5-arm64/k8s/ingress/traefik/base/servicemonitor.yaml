@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: traefik
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: traefik
+  namespaceSelector:
+    matchNames:
+      - ingress
+  endpoints:
+    - port: metrics
+      interval: 15s

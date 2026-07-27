@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: ingress
+data:
+  config.yml: |
+    tunnel: <tunnel-id>
+    credentials-file: /etc/cloudflared/creds/credentials.json
+
+    ingress:
+      - hostname: "*.example.com"
+        service: http://traefik-external.ingress.svc.cluster.local:80
+
+      - service: http_status:404

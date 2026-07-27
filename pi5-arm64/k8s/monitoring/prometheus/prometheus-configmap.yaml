@@ -18,8 +18,14 @@ data:
           - targets:
               - localhost:9090
 
-      - job_name: traefik
+      - job_name: 'traefik-external'
         metrics_path: /metrics
         static_configs:
           - targets:
-              - traefik-metrics.traefik.svc.cluster.local:8082
+              - traefik-metrics-external.ingress.svc.cluster.local:8082
+
+      - job_name: 'traefik-internal'
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - traefik-metrics-internal.ingress.svc.cluster.local:8082
