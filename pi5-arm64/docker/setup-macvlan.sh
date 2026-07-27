@@ -23,7 +23,7 @@ DOCKER_NET="macvlan_net"
 SUBNET="192.168.1.0/24"
 GATEWAY="192.168.1.1"
 IP_RANGE="192.168.1.96/28" # covers 192.168.1.96-192.168.1.111. 16 total addresses, 14 usable (excluding network/broadcast)
-HOST_IP="192.168.1.223"
+HOST_IP="192.168.1.111"
 SERVICE_FILE="/etc/systemd/system/macvlan-shim.service"
 # -----------------------------------------------------------------------------
 

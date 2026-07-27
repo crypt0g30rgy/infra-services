@@ -39,6 +39,7 @@ microk8s enable dashboard
 microk8s enable metrics-server
 microk8s enable hostpath-storage
 microk8s enable registry
+microk8s enable metallb:192.168.1.200-192.168.1.200
 ```
 
 List all available addons:
@@ -49,6 +50,61 @@ microk8s enable --help
 ```
 
 ---
+
+### Custom dns in cluster
+
+- use nano 
+
+```sh
+export KUBE_EDITOR="nano"
+```
+
+- edit config 
+
+```sh
+microk8s kubectl edit configmap coredns -n kube-system
+```
+
+```json
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        
+        # Add this hosts block
+        hosts {
+            192.168.1.50 myhost.local
+            10.0.0.5 internal-api.example.com
+            fallthrough
+        }
+
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }   
+```
+
+- restart kube dns with new dns changes
+
+```sh
+microk8s kubectl delete pod -n kube-system -l k8s-app=kube-dns   
+```
+
+- validate
+
+```sh
+microk8s kubectl run -it --rm --restart=Never --image=busybox nslookup myhost.local   
+```
 
 ## 4. Check Cluster Status
 
