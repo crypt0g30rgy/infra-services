@@ -1,10 +1,16 @@
 networks:
+  macvlan_net:
+    external: true
+
   proxy:
-    external: true # or comment this line to auto create the network create with: docker network create proxy
+    external: true
+
   dashboards:
-    external: true # or comment this line to auto create the network create with: docker network create web
+    external: true
+
   internal:
     external: true
+
 
 services:
   traefik:
@@ -13,49 +19,81 @@ services:
     restart: unless-stopped
 
     security_opt:
-      - no-new-privileges:true # helps to increase security
+      - no-new-privileges:true
+
     env_file:
-      - .env # store other secrets e.g., dashboard password
+      - .env
+
     command:
       - "--configFile=/traefik.yml"
+
     ports:
-      - "8080:80"
-      - "8443:443"
-      - "11000:8080" # <- Traefik Dashboard Port
+      # Do NOT bind these on the host anymore.
+      # macvlan gives Traefik its own LAN IP.
+      # Access via 192.168.1.98:80/443
+      - "8080:8080"
+
     environment:
-      - TRAEFIK_DASHBOARD_CREDENTIALS=${TRAEFIK_DASHBOARD_CREDENTIALS} # <- set this in your .env file e.g admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/ which is admin:password
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # <- Cloudflare API token file
-      - LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL} # <- your email for Let's Encrypt notifications
+      - TRAEFIK_DASHBOARD_CREDENTIALS=${TRAEFIK_DASHBOARD_CREDENTIALS}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - LETS_ENCRYPT_EMAIL=${LETS_ENCRYPT_EMAIL}
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/traefik.yml:ro
       - ./letsencrypt:/letsencrypt
-      - ./logs:/var/log/traefik   # <- log directory
-      - ./plugins:/plugins-local:ro  # <- local plugins directory
+      - ./logs:/var/log/traefik
+      - ./plugins:/plugins-local:ro
+
     networks:
-      - dashboards # <- network for traefik and your services
-      - internal # <- internal network for secure services
-      - proxy # <- network for proxies
+      macvlan_net:
+        ipv4_address: 192.168.1.98
+
+      dashboards:
+
+      internal:
+
+      proxy:
+
 
     labels:
-      # Dashboard
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_INTERNAL_HOST}`)" # <- change to your domain
-      - "traefik.http.routers.traefik.entrypoints=websecure" # <- use websecure entrypoint
-      - "traefik.http.routers.traefik.tls=true" # <- enable TLS
-      - "--certificatesresolvers.myresolver.acme.email=${LETS_ENCRYPT_EMAIL}" # <- your email for Let's Encrypt notifications
-      - "traefik.http.routers.traefik.tls.certresolver=myresolver" # <- use the certresolver defined in traefik.yml
-      - "traefik.http.routers.traefik.middlewares=auth" # <- enable authentication middleware
-      - "traefik.http.middlewares.auth.basicauth.removeheader=true" # <- remove the header after authentication
-      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}"
-      - "traefik.http.routers.traefik.service=api@internal" # <- enable the api service
-      - "traefik.http.routers.traefik.priority=10" # <- set a high priority to avoid conflicts with other routers
-      - "traefik.http.routers.whoami.tls.domains[0].main=${DOMAIN}" # <- main domain for the certificate
-      - "traefik.http.routers.whoami.tls.domains[0].sans=${WILDCARD_DOMAIN}" # <- wildcard domain for the certificate
 
-      # Consolidated Dashboard Router
+      # Enable Traefik provider
+      - "traefik.enable=true"
+
+
+      # ==========================
+      # Main Traefik Dashboard
+      # ==========================
+
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_INTERNAL_HOST}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+
+      - "traefik.http.routers.traefik.service=api@internal"
+
+      - "traefik.http.routers.traefik.middlewares=auth"
+
+      - "traefik.http.middlewares.auth.basicauth.removeheader=true"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}"
+
+
+      # ==========================
+      # Dashboard Aggregator
+      # ==========================
+
       - "traefik.http.routers.dashboard.rule=Host(`dashboard.local.xboy.me`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
+
       - "traefik.http.routers.dashboard.service=noop@internal"
+
+
+      # ==========================
+      # Wildcard certificate domains
+      # ==========================
+
+      - "traefik.http.routers.traefik.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.traefik.tls.domains[0].sans=${WILDCARD_DOMAIN}"
