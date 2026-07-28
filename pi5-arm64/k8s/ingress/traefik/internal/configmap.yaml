@@ -65,10 +65,8 @@ data:
 
     providers:
       kubernetesCRD:
-        ingressClass: internal
         allowCrossNamespace: true
       kubernetesIngress:
-        ingressClass: internal
         allowExternalNameServices: true
 
     certificatesResolvers:
