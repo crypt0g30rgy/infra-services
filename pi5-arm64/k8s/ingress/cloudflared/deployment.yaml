@@ -21,9 +21,21 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - tunnel
+            - --no-autoupdate
             - --config
             - /etc/cloudflared/config.yml
             - run
+            - --token
+            - $(CLOUDFLARE_TUNNEL_TOKEN)
+          env:
+            - name: CLOUDFLARE_TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-token
+                  key: token
+            - name: DNS_RESOLVERS
+              value: "1.1.1.1,8.8.8.8"
+              
           resources:
             requests:
               cpu: 10m
@@ -35,14 +47,8 @@ spec:
             - name: config
               mountPath: /etc/cloudflared
               readOnly: true
-            - name: creds
-              mountPath: /etc/cloudflared/creds
-              readOnly: true
-      restartPolicy: Always
+
       volumes:
         - name: config
           configMap:
             name: cloudflared-config
-        - name: creds
-          secret:
-            secretName: cloudflared-credentials
