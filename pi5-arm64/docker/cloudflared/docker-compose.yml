@@ -1,10 +1,6 @@
 networks:
   proxy:
     external: true
-  internal:
-    external: true
-  ci-cd:
-    external: true
   dashboards:
     external: true
 services:
@@ -17,8 +13,6 @@ services:
     restart: unless-stopped
     networks:
       - proxy
-      - internal
-      - ci-cd
       - dashboards
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     labels:
