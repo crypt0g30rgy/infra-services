@@ -7,3 +7,14 @@ spec:
   headers:
     customResponseHeaders:
       X-Routed-By: "k8s-cluster"
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: cluster-identity-header-external
+  namespace: ingress
+spec:
+  headers:
+    customResponseHeaders:
+      X-Routed-By: "k8s-cluster"
