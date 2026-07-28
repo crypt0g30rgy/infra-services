@@ -8,7 +8,13 @@ data:
     tunnel: <tunnel-id>
 
     ingress:
+      - hostname: "example.com"
+        service: http://traefik-external.ingress.svc.cluster.local:80
+
       - hostname: "*.example.com"
+        service: http://traefik-external.ingress.svc.cluster.local:80
+        
+      - hostname: "example.net"
         service: http://traefik-external.ingress.svc.cluster.local:80
 
       - hostname: "*.example.net"

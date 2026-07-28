@@ -71,11 +71,19 @@ data:
 
     providers:
       kubernetesCRD:
-        ingressClass: public
         allowCrossNamespace: true
       kubernetesIngress:
-        ingressClass: public
         allowExternalNameServices: true
+
+    certificatesResolvers:
+      letsencrypt-internal:
+        acme:
+          storage: /data/acme/acme.json
+          dnsChallenge:
+            provider: cloudflare
+            resolvers:
+              - "1.1.1.1:53"
+              - "1.0.0.1:53"
 
     api:
       dashboard: true
