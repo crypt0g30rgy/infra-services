@@ -5,28 +5,32 @@ metadata:
   namespace: registry
 data:
   config.yml: |
-      version: 0.1
-      log:
-        fields:
-          service: registry
-      storage:
-        delete:
-          enabled: true
-        cache:
-          blobdescriptor: inmemory
-        filesystem:
-          rootdirectory: /var/lib/registry
-      http:
-        addr: :5000
-        headers:
-          X-Content-Type-Options: [nosniff]
-          Access-Control-Allow-Origin: ['*']
-          Access-Control-Allow-Methods: ['HEAD', 'GET', 'OPTIONS', 'DELETE']
-          Access-Control-Allow-Headers: ['Authorization', 'Accept', 'Cache-Control']
-          Access-Control-Max-Age: [1728000]
-          Access-Control-Allow-Credentials: [true]
-          Access-Control-Expose-Headers: ['Docker-Content-Digest']
+        version: 0.1
+
+        log:
+          fields:
+            service: registry
+
+        storage:
+          delete:
+            enabled: true
+          cache:
+            blobdescriptor: inmemory
+          filesystem:
+            rootdirectory: /var/lib/registry
+
+        http:
+          addr: :5000
+          headers:
+            X-Content-Type-Options: [nosniff]
+            Access-Control-Allow-Origin: ['*']
+            Access-Control-Allow-Methods: ['HEAD', 'GET', 'OPTIONS', 'DELETE']
+            Access-Control-Allow-Headers: ['Authorization', 'Accept', 'Cache-Control']
+            Access-Control-Max-Age: [1728000]
+            Access-Control-Allow-Credentials: [true]
+            Access-Control-Expose-Headers: ['Docker-Content-Digest']
+
         auth:
           htpasswd:
             realm: Registry
-            path: /etc/docker/registry/htpasswd
+            path: /etc/docker/registry/auth/htpasswd

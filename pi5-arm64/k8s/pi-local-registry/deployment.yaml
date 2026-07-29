@@ -5,6 +5,7 @@ metadata:
   namespace: registry
 spec:
   replicas: 1
+
   selector:
     matchLabels:
       app: registry
@@ -24,7 +25,9 @@ spec:
             - /etc/docker/registry/config.yml
 
           ports:
-            - containerPort: 5000
+            - name: http
+              containerPort: 5000
+
           env:
             - name: REGISTRY_HTTP_SECRET
               valueFrom:
@@ -34,12 +37,23 @@ spec:
 
           resources:
             requests:
-              # cpu: 125m
               memory: 128Mi
-
             limits:
-              # cpu: 250m
               memory: 256Mi
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
 
           volumeMounts:
             - name: storage
@@ -50,43 +64,7 @@ spec:
 
             - name: auth
               mountPath: /etc/docker/registry/auth
-              # readOnly: true
-
-        - name: registry-cleaner
-          image: alpine:3.24
-
-          command:
-            - /bin/sh
-            - /scripts/cleanup.sh
-
-          env:
-            - name: REGISTRY_URL
-              value: http://localhost:5000
-
-            - name: REGISTRY_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: registry-auth
-                  key: username
-
-            - name: REGISTRY_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: registry-auth
-                  key: password
-
-          resources:
-            requests:
-              # cpu: 50m
-              memory: 32Mi
-
-            limits:
-              # cpu: 100m
-              memory: 64Mi
-
-          volumeMounts:
-            - name: cleanup-script
-              mountPath: /scripts
+              readOnly: true
 
       volumes:
         - name: storage
@@ -100,8 +78,3 @@ spec:
         - name: auth
           secret:
             secretName: registry-auth
-
-        - name: cleanup-script
-          configMap:
-            name: registry-cleanup
-            defaultMode: 0755

@@ -2,12 +2,12 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: registry
-  namespace: registry
+  namespace: jenkins
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     
 spec:
-  ingressClassName: traefik
+  ingressClassName: public
   rules:
     - host: docker.example.com
       http:
@@ -16,6 +16,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: registry
+                name: jenkins
                 port:
                   number: 80
