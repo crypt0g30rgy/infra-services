@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-cleanup
+  namespace: registry
+spec:
+  schedule: "0 3 * * *"
+
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+            - name: cleanup
+              image: alpine:3.24
+
+              command:
+                - /bin/sh
+                - /scripts/cleanup.sh
+
+              env:
+                - name: REGISTRY_URL
+                  value: http://registry:5000
+
+                - name: REGISTRY_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: registry-auth
+                      key: username
+
+                - name: REGISTRY_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: registry-auth
+                      key: password
+
+              resources:
+                requests:
+                  memory: 32Mi
+                limits:
+                  memory: 64Mi
+
+              volumeMounts:
+                - name: cleanup-script
+                  mountPath: /scripts
+
+          volumes:
+            - name: cleanup-script
+              configMap:
+                name: registry-cleanup
+                defaultMode: 0755
