@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+
+  template:
+    metadata:
+      labels:
+        app: registry
+
+    spec:
+      containers:
+        - name: registry
+          image: registry:3.1.1
+
+          args:
+            - serve
+            - /etc/docker/registry/config.yml
+
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: registry-http-secret
+
+          resources:
+            requests:
+              # cpu: 125m
+              memory: 128Mi
+
+            limits:
+              # cpu: 250m
+              memory: 256Mi
+
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+
+            - name: config
+              mountPath: /etc/docker/registry
+
+            - name: auth
+              mountPath: /etc/docker/registry/auth
+              # readOnly: true
+
+        - name: registry-cleaner
+          image: alpine:3.24
+
+          command:
+            - /bin/sh
+            - /scripts/cleanup.sh
+
+          env:
+            - name: REGISTRY_URL
+              value: http://localhost:5000
+
+            - name: REGISTRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: username
+
+            - name: REGISTRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: password
+
+          resources:
+            requests:
+              # cpu: 50m
+              memory: 32Mi
+
+            limits:
+              # cpu: 100m
+              memory: 64Mi
+
+          volumeMounts:
+            - name: cleanup-script
+              mountPath: /scripts
+
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: registry-storage
+
+        - name: config
+          configMap:
+            name: registry-config
+
+        - name: auth
+          secret:
+            secretName: registry-auth
+
+        - name: cleanup-script
+          configMap:
+            name: registry-cleanup
+            defaultMode: 0755
