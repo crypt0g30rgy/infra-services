@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-cleanup
+  namespace: registry
+data:
+  cleanup.sh: |
+    #!/bin/sh
+    set -eu
+
+    apk add --no-cache curl jq coreutils
+
+    RETENTION_DAYS=30
+
+    REGISTRY="${REGISTRY_URL}"
+    AUTH="${REGISTRY_USERNAME}:${REGISTRY_PASSWORD}"
+
+    echo "Registry cleanup started"
+
+    cutoff=$(date -u -d "-${RETENTION_DAYS} days" +"%Y-%m-%dT%H:%M:%SZ")
+
+    echo "Deleting images older than ${cutoff}"
+
+    repos=$(curl -fsSL -u "$AUTH" \
+      "${REGISTRY}/v2/_catalog?n=1000" \
+      | jq -r '.repositories[]')
+
+    for repo in $repos; do
+
+      echo "Checking repository: $repo"
+
+      tags=$(curl -fsSL -u "$AUTH" \
+        "${REGISTRY}/v2/${repo}/tags/list" \
+        | jq -r '.tags[]?')
+
+      for tag in $tags; do
+
+        echo "Checking ${repo}:${tag}"
+
+        manifest=$(curl -fsSL \
+          -u "$AUTH" \
+          -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+          "${REGISTRY}/v2/${repo}/manifests/${tag}")
+
+        digest=$(echo "$manifest" | \
+          sha256sum | \
+          awk '{print $1}')
+
+        config_digest=$(echo "$manifest" \
+          | jq -r '.config.digest // empty')
+
+        if [ -z "$config_digest" ]; then
+          echo "Skipping ${repo}:${tag} (no config digest)"
+          continue
+        fi
+
+
+        created=$(curl -fsSL \
+          -u "$AUTH" \
+          -H "Accept: application/vnd.docker.container.image.v1+json" \
+          "${REGISTRY}/v2/${repo}/blobs/${config_digest}" \
+          | jq -r '.created // empty')
+
+
+        if [ -z "$created" ]; then
+          echo "Skipping ${repo}:${tag} (no created timestamp)"
+          continue
+        fi
+
+
+        echo "Created: $created"
+
+
+        if [ "$created" \< "$cutoff" ]; then
+
+          echo "Deleting old image ${repo}:${tag}"
+
+          digest=$(curl -sI \
+            -u "$AUTH" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            "${REGISTRY}/v2/${repo}/manifests/${tag}" \
+            | grep -i Docker-Content-Digest \
+            | awk '{print $2}' \
+            | tr -d '\r')
+
+
+          if [ -n "$digest" ]; then
+
+            curl -fsSL \
+              -u "$AUTH" \
+              -X DELETE \
+              "${REGISTRY}/v2/${repo}/manifests/${digest}"
+
+            echo "Deleted ${repo}:${tag}"
+          fi
+
+        fi
+
+      done
+
+    done
+
+
+    echo "Cleanup completed"
+
+    echo "Run registry garbage collection separately:"
+    echo "registry garbage-collect /etc/docker/registry/config.yml"
