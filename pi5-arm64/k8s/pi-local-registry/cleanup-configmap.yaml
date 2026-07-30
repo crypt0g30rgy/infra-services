@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: registry-cleanup
-  namespace: registry
+  namespace: internal-registry
 data:
   cleanup.sh: |
     #!/bin/sh

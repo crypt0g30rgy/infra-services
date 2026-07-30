@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: registry
-  namespace: registry
+  name: docker
+  namespace: internal-registry
 spec:
   selector:
     app: registry

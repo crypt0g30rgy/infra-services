@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: registry-cleanup
-  namespace: registry
+  namespace: internal-registry
 spec:
   schedule: "0 3 * * *"
 
