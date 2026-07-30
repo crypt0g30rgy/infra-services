@@ -49,6 +49,18 @@ microk8s status --wait-ready
 microk8s enable --help
 ```
 
+Install keda for event driven workflows
+
+```bash
+helm repo add kedacore https://kedacore.github.io/charts
+helm install keda kedacore/keda --namespace keda --create-namespace   
+```
+Install external secrets manager for auto injection of secrets 
+
+```bash
+helm repo add external-secrets https://charts.external-secrets.io
+helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
+```
 ---
 
 ### Custom dns in cluster

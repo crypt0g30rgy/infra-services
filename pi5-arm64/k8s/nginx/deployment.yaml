@@ -59,7 +59,7 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-    - host: testing.xboy.me
+    - host: testing.example.com
       http:
         paths:
           - path: /
