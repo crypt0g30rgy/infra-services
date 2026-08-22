@@ -2,7 +2,7 @@
 
 ## check-image-updates.py
 
-Answers one question daily: which container images are behind upstream?
+Answers one question weekly: which container images are behind upstream?
 
 ```bash
 python3 scripts/check-image-updates.py                 # tags declared in this repo
@@ -72,12 +72,16 @@ running Deployment gets reverted by the next `helm upgrade`, or worse, pairs a n
 sidecar with an old manager. Upgrade the chart and let it pick. The report cannot
 tell these apart from the rest, so this is on you to notice.
 
-### The daily job
+### The weekly job
 
 [`.github/workflows/image-updates.yml`](../.github/workflows/image-updates.yml)
-runs the repo mode at 06:15 UTC and rewrites a single issue titled *Container
-image update report* in place. One issue, not one per day — its edit history is
-the changelog, and there is nothing to close.
+runs the repo mode at 06:15 UTC on Mondays and rewrites a single issue titled
+*Container image update report* in place. One issue, not one per run — its edit
+history is the changelog, and there is nothing to close.
+
+Weekly rather than daily deliberately: a report that is replaced before you have
+had time to act on it is noise, and a week is long enough to work through the
+list. `workflow_dispatch` is there for when you want an answer sooner.
 
 It reports and stops. Nothing in this cluster gets upgraded by a schedule.
 

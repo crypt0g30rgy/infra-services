@@ -8,5 +8,5 @@ infra services is a repo that hosts services running in my homelab/production se
 
 [`scripts/check-image-updates.py`](./scripts/README.md) reports which container
 images are behind upstream, either from the tags declared here or from what is
-actually running in the cluster. A scheduled workflow runs it daily and keeps the
+actually running in the cluster. A scheduled workflow runs it weekly and keeps the
 answer in one issue; it never bumps a tag by itself.

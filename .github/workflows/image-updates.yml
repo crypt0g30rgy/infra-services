@@ -1,18 +1,22 @@
 name: image updates
 
-# Asks the public registries once a day which of the images this repo pins have
+# Asks the public registries once a week which of the images this repo pins have
 # moved on, and keeps the answer in one issue that gets rewritten in place rather
-# than a new issue every morning - the issue's edit history is the changelog.
+# than a new issue every time - the issue's edit history is the changelog.
 #
 # It reports; it does not bump anything. Tag bumps stay a deliberate act, because
-# a chart of one-replica volumes with no backup target is not somewhere to let a
+# a cluster of one-replica volumes with no backup target is not somewhere to let a
 # robot roll a major version through unattended.
 
 on:
   schedule:
-    # 06:15 UTC. Off the hour on purpose: the top of the hour is when GitHub's
-    # scheduler is most oversubscribed and cron jobs get delayed the longest.
-    - cron: "15 6 * * *"
+    # Mondays at 06:15 UTC. Weekly rather than daily on purpose: a report you
+    # cannot act on before the next one arrives is just noise, and a week is
+    # enough time to actually work through the list.
+    #
+    # Off the hour because the top of the hour is when GitHub's scheduler is most
+    # oversubscribed and cron jobs get delayed the longest.
+    - cron: "15 6 * * 1"
   workflow_dispatch:
     inputs:
       only:
@@ -21,7 +25,7 @@ on:
         type: string
 
 # Only ever one of these in flight, and a newer run wins - a queued backlog of
-# yesterday's reports has no value.
+# last week's reports has no value.
 concurrency:
   group: image-updates
   cancel-in-progress: true
