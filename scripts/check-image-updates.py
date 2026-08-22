@@ -396,7 +396,7 @@ PREAMBLE = {
     ),
     "error": (
         "Transient upstream failures and rate limits both land here. A repeat "
-        "across consecutive days is the signal; a single day is usually not."
+        "across consecutive runs is the signal; a single run is usually not."
     ),
 }
 
