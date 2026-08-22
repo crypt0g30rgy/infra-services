@@ -224,24 +224,49 @@ Then, one volume at a time, never two:
 The old hostpath directory is left in place as the rollback, which is what the
 `Retain` patch in step 0 is for. Reclaim it later, deliberately.
 
-### Reclaiming the ten rollback copies
+### The rollback copies have been reclaimed
 
-All ten hostpath PVs are sitting `Released` with their directories intact on the
-pi, under `/var/snap/microk8s/common/default-storage/`. Nothing uses them; they
-exist so a bad migration could be undone by pointing the claim back:
+Done on 2026-08-22, after the new volumes had been exercised. **There are no
+hostpath PVs left and `/var/snap/microk8s/common/default-storage/` is empty** —
+so the rollback described above no longer exists, and the Longhorn volumes are
+now the only copy of all of this data. See "There is no backup target" above;
+that risk went from theoretical to the whole story.
+
+10.1 GB came back on the pi's microSD (83.5 → 73.5 GB used, 76% → 67%), 8.9 GB
+of it the Jenkins buildkit cache.
+
+If it ever has to be done again, the order matters, and it is two steps because
+`Retain` deliberately decouples them:
 
 ```bash
+# 1. what exists, and where on disk
 kubectl get pv -o json | jq -r '
   .items[] | select(.spec.storageClassName=="microk8s-hostpath")
   | [.metadata.name, .status.phase, .spec.hostPath.path] | @tsv'
+
+# 2. delete the PV objects - with reclaimPolicy Retain this frees NO disk
+kubectl delete pv <names...>
+
+# 3. then remove the directories on the pi. There is no shell on the node from
+#    the tooling side, so do it through a pod that mounts the parent:
+kubectl run reclaim -n utils --rm -it --restart=Never --image=busybox:1.37 \
+  --overrides='{"spec":{"nodeName":"pi-5-16gb-srv-0","securityContext":{"runAsUser":0},
+    "containers":[{"name":"h","image":"busybox:1.37","stdin":true,"tty":true,
+    "command":["sh"],"volumeMounts":[{"name":"ds","mountPath":"/ds"}]}],
+    "volumes":[{"name":"ds","hostPath":{"path":"/var/snap/microk8s/common/default-storage","type":"Directory"}}]}}'
 ```
 
-That is worth real disk on a microSD card that has run over 90% full - the
-`traefik-data` copy alone is 273 MB, almost all of it one unrotated
-`access.log`. Deleting the PV does **not** delete the directory now that the
-policy is `Retain`, so reclaiming space is two steps: `kubectl delete pv <name>`
-and then remove the directory on the pi. Do it once you are satisfied the new
-volumes are good, and not before.
+Check the replacement claim is `Bound` on `longhorn` **and** its Longhorn volume
+is `healthy` before deleting anything. One caveat on that check: a volume only
+mounted by an ephemeral pod - `buildkit-cache-pvc`, mounted solely by Jenkins
+agents - reads `detached` / `robustness: unknown` between builds, which is normal
+and not a fault. Confirm it by its replica instead: `failedAt` empty and the
+volume's `Scheduled` condition `True`.
+
+The `microk8s-hostpath` StorageClass and its provisioner are left in place, just
+no longer the default and no longer used by anything. Note that the provisioner
+Deployment has been crash-looping for months (899 restarts) - harmless now that
+nothing asks it for a volume, but that is why it is not worth trusting again.
 
 Two shapes need extra care:
 
