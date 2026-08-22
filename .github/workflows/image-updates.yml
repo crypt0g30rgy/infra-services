@@ -1,0 +1,116 @@
+name: image updates
+
+# Asks the public registries once a day which of the images this repo pins have
+# moved on, and keeps the answer in one issue that gets rewritten in place rather
+# than a new issue every morning - the issue's edit history is the changelog.
+#
+# It reports; it does not bump anything. Tag bumps stay a deliberate act, because
+# a chart of one-replica volumes with no backup target is not somewhere to let a
+# robot roll a major version through unattended.
+
+on:
+  schedule:
+    # 06:15 UTC. Off the hour on purpose: the top of the hour is when GitHub's
+    # scheduler is most oversubscribed and cron jobs get delayed the longest.
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Only check refs containing this substring"
+        required: false
+        type: string
+
+# Only ever one of these in flight, and a newer run wins - a queued backlog of
+# yesterday's reports has no value.
+concurrency:
+  group: image-updates
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for newer image tags
+        env:
+          # No registry credentials anywhere in this job, by design. Every
+          # registry it talks to hands a pull-scoped token to an anonymous
+          # caller, so there is nothing to log in to; internal registries are out
+          # of scope precisely because they would need a secret. If a busy hosted
+          # runner ever comes back HTTP 429, the report says so for those images
+          # rather than guessing - that is the correct failure, not a reason to
+          # put a token in here.
+          #
+          # Through the environment rather than interpolated into the script:
+          # ${{ inputs.* }} is expanded before bash sees the line, so a dispatch
+          # input containing a semicolon would run as a command.
+          ONLY: ${{ inputs.only }}
+        run: |
+          set -euo pipefail
+          args=(--markdown report.md --json report.json)
+          # An `[ ... ] && ...` one-liner would exit 1 here under `set -e` on the
+          # common path where ONLY is unset, failing the step.
+          if [ -n "${ONLY:-}" ]; then
+            args+=(--only "$ONLY")
+          fi
+          python3 scripts/check-image-updates.py "${args[@]}"
+
+      - name: Publish to the run summary
+        run: cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert the report issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Container image update report
+        run: |
+          set -euo pipefail
+
+          {
+            cat report.md
+            echo
+            echo "---"
+            echo
+            echo "Rewritten in place by [\`image-updates\`]($RUN_URL) on $(date -u '+%Y-%m-%d %H:%M UTC')."
+            echo "Floating tags cannot be compared by name from a hosted runner; run"
+            echo "\`scripts/check-image-updates.py --from-cluster\` on a machine with"
+            echo "cluster access to find pods still running a superseded digest."
+          } > body.md
+
+          # Exact title match on a listing, not `gh issue list --search`: search
+          # tokenises the query, so a phrase can match loosely, and picking the
+          # wrong issue here would overwrite somebody's real one.
+          existing=$(gh issue list --repo "$REPO" --state open --limit 200 \
+            --json number,title \
+            --jq '[.[] | select(.title == env.TITLE) | .number] | first // empty')
+
+          # --body-file rather than --body throughout: the report is multi-line
+          # Markdown full of backticks and pipes, and pushing that through a
+          # shell argument is a quoting accident waiting to happen.
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file body.md
+            echo "Updated issue #$existing"
+          else
+            # The label may not exist yet, and gh treats that as fatal; the report
+            # matters more than the label does.
+            gh issue create --repo "$REPO" --title "$TITLE" --body-file body.md \
+              --label image-updates \
+              || gh issue create --repo "$REPO" --title "$TITLE" --body-file body.md
+          fi
+
+      - name: Keep the raw results with the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-report
+          path: |
+            report.md
+            report.json
+          if-no-files-found: warn
