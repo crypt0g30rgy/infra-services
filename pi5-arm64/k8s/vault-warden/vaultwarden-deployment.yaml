@@ -13,9 +13,21 @@ spec:
       labels:
         app: vaultwarden
     spec:
+      # On dell, with postgres-statefulset.yaml, now that both volumes are on
+      # Longhorn. Two reasons, in order of weight:
+      #
+      # 1. Every Longhorn replica lives on dell (it is the only storage node),
+      #    so a pod on dell reads and writes its own disk. The same pod on the
+      #    pi reaches the identical data over iSCSI across the LAN.
+      # 2. The pi had ~3670m of its 4000m CPU requested; dell was at ~15%.
+      #
+      # vaultwarden/server and postgres:15-alpine are both multi-arch.
+      nodeSelector:
+        kubernetes.io/hostname: dell-amd64-srv
+
       containers:
         - name: vaultwarden
-          image: vaultwarden/server:1.37.0
+          image: vaultwarden/server:1.37.1
           ports:
             - containerPort: 80
           envFrom:
@@ -26,6 +38,8 @@ spec:
           env:
             - name: DATABASE_URL
               value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.vaultwarden.svc.cluster.local:5432/$(POSTGRES_DB)"
+            - name: ICON_SERVICE
+              value: duckduckgo
           volumeMounts:
             - name: data
               mountPath: /data

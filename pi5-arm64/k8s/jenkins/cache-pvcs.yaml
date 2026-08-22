@@ -6,7 +6,30 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: microk8s-hostpath
+  # Longhorn, not microk8s-hostpath. A hostpath cache is a directory on the pi,
+  # which forced every CI build pod onto the pi to reach it. On Longhorn the
+  # cache follows the build pod to either node.
+  #
+  # This one was migrated by simply deleting and recreating the PVC - a build
+  # cache is disposable by definition, so there was nothing to copy. It also
+  # handed ~9GB back to the pi's microSD card.
+  #
+  # The write path is now iSCSI to dell instead of local microSD. Untested
+  # either way: the LAN round trip costs something, dell's SSD is far faster
+  # than a microSD card, and which wins has not been measured. If builds get
+  # slower, this is the first thing to look at.
+  #
+  # Side effect worth knowing: ../../../../tdi-ci pod-template.yaml selects its
+  # agent node by kubernetes.io/arch, so an amd64 build lands on dell. While
+  # this cache was hostpath-on-the-pi, such a build could not mount it at all.
+  # It can now - multi-arch CI actually works.
+  #
+  # The new limit is that ReadWriteOnce on Longhorn means one *node* at a time,
+  # strictly enforced (hostpath never really enforced it). Two builds on the
+  # same node still share the cache fine; an arm64 build and an amd64 build
+  # running concurrently will fight over it, and the second one to ask will fail
+  # to attach. Give the two arches separate cache PVCs if that starts happening.
+  storageClassName: longhorn
   resources:
     requests:
       # Docker layer cache can grow quickly with multiple images/branches.
