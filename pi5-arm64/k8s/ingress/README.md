@@ -66,9 +66,47 @@ pi5-arm64/k8s/ingress/
 
 ## 3. Log Rotation & Disk Retention
 
-To prevent the local disk/PVC from filling up (1GB PVC limit), both Traefik deployments include a lightweight, unprivileged **`logrotate` sidecar container** (`alpine:3.24`).
-- Access logs are written in structured JSON to `/data/logs/access.log`.
-- `logrotate` runs daily, truncating files whenever they hit `100M` and preserving up to `30` log rotations (giving you exactly 30 days of retention).
+Access logs are written in structured JSON to `/data/logs/access.log` on the
+`traefik-data` PVC, which is **1 Gi**. A sidecar named `logrotate` in the Traefik
+deployment keeps that bounded: it checks the file every 5 minutes and, above
+**50 MiB**, copy-truncates it to `access.log.1` keeping **3** archives. Worst
+case on disk is roughly 250 MiB including one in-flight copy.
+
+It is a plain `sh` loop in `traefik/base/deployment.yaml`, not the `logrotate`
+package, and runs as 65532 with a read-only root filesystem. It reports each
+rotation on stdout, so `kubectl logs deploy/traefik -c logrotate` is the place to
+look.
+
+**Why not the actual `logrotate` tool.** It was, until 2026-08-22, and it had
+rotated nothing since the day it was deployed — `access.log` reached **287 MB on
+a 1 Gi volume** while the sidecar sat there reporting `Running`. Two independent
+faults, either of which was enough:
+
+- It installed the package at container start with
+  `apk add --no-cache logrotate >/dev/null 2>&1`. On the pi that silently failed
+  — every Cloudflare IPv4 edge is unreachable from that host and
+  `dl-cdn.alpinelinux.org` is behind it — leaving a loop that called a binary
+  that did not exist, with the error discarded.
+- Its config said `su 65532 65532`. `logrotate` resolves those through
+  `getpwnam`/`getgrnam`, the alpine image has no such user or group, and it
+  answered `unknown group '65532'` → `skipping` → `Handling 0 logs`. So it
+  rotated nothing even on a node where the install worked.
+
+The shell version has nothing to install and no name to resolve. Verify a change
+to it the same way this was caught, rather than trusting `Running`:
+
+```bash
+kubectl -n ingress logs deploy/traefik -c logrotate
+kubectl -n ingress exec deploy/traefik -c logrotate -- sh -c 'df -h /data; ls -la /data/logs'
+```
+
+**Separately: something is generating a lot of log.** `accessLog.filters`
+already restricts it to status codes `400-599`, and it still grew ~11 MB/day.
+Most of it is one repeating error — the `api-gw-svc` Ingress in the `apps`
+namespace names a Service `api-gw-svc` that does not exist (the real ones are
+`admin-api-gw-svc`, `ai-api-gw-svc`, `users-api-gw-svc`), so Traefik logs
+`Cannot create service` every ~30s. Rotation stops that filling the volume; it
+does not stop the noise.
 
 ---
 
