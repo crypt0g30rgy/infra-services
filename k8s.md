@@ -19,7 +19,13 @@ sudo usermod -aG microk8s $USER
 sudo chown -f -R $USER ~/.kube
 newgrp microk8s
 ```
+Create a read-only account
 
+```bash
+openssl genrsa -out readonly-user.key 2048
+openssl req -new -key readonly-user.key -out readonly-user.csr -subj "/CN=readonly-user/O=readers"
+openssl x509 -req -in readonly-user.csr -CA /var/snap/microk8s/current/certs/ca.crt -CAkey /var/snap/microk8s/current/certs/ca.key -CAcreateserial -out readonly-user.crt -days 365   
+```
 ---
 
 ## 3. Enable Addons
@@ -41,6 +47,12 @@ microk8s enable hostpath-storage
 microk8s enable registry
 microk8s enable metallb:192.168.1.200-192.168.1.200
 ```
+
+`hostpath-storage` gives you a `PersistentVolume` that is just a directory on
+one node's disk, which pins every workload owning data to that machine. Since
+the cluster gained a second node it uses **Longhorn** instead — see
+[`pi5-arm64/k8s/longhorn`](./pi5-arm64/k8s/longhorn). The hostpath addon stays
+enabled and default while volumes are still being migrated across.
 
 List all available addons:
 
