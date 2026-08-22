@@ -6,6 +6,14 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  # Named explicitly rather than relying on the cluster default. It used to be
+  # microk8s-hostpath - a directory on the pi - which pinned traefik, and with it
+  # every route into the cluster, to that one machine.
+  #
+  # storageClassName is immutable once a PVC is bound, so this line only governs
+  # a *new* claim; the live volume was copied to Longhorn and the claim rebound
+  # by hand with ../../longhorn/migrate-pvc-to-longhorn.sh.
+  storageClassName: longhorn
   resources:
     requests:
       storage: 1Gi

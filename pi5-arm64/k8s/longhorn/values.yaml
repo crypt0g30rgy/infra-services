@@ -37,10 +37,22 @@ csi:
 
 persistence:
   createStorageClass: true
-  # Deliberately NOT the cluster default. microk8s-hostpath stays default so
-  # that nothing new lands on Longhorn by accident while volumes are still
-  # being migrated one at a time. Flip this once the last hostpath PVC is gone.
-  defaultClass: false
+  # The cluster default, as of the last hostpath PVC being migrated. It was
+  # false for the duration of the migration so that nothing new could land on
+  # Longhorn while volumes were still being moved one at a time.
+  #
+  # Flipping this is not optional housekeeping: a PVC with no storageClassName
+  # gets the default, so leaving microk8s-hostpath as the default would have
+  # quietly put every future volume back on a directory on the pi and undone the
+  # whole exercise one manifest at a time.
+  #
+  # microk8s-hostpath's own default annotation had to be removed by hand at the
+  # same time - it is created by the microk8s addon, not by this chart, and two
+  # StorageClasses both claiming to be the default is an error state:
+  #
+  #   kubectl annotate sc microk8s-hostpath \
+  #     storageclass.kubernetes.io/is-default-class-
+  defaultClass: true
   defaultClassReplicaCount: 1
   # A deleted PVC must not take the data with it. This is the single most
   # important line in this file.
