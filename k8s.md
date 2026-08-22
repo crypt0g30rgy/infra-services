@@ -130,6 +130,58 @@ microk8s kubectl delete pod -n kube-system -l k8s-app=kube-dns
 microk8s kubectl run -it --rm --restart=Never --image=busybox nslookup myhost.local   
 ```
 
+### Node-level DNS for `*.internal.xboy.me` (containerd, not coredns)
+
+The coredns change above only fixes name resolution **inside pods**. Pulling an
+image does not go through coredns — containerd on the node uses the host's own
+resolver — so a registry that only exists in the LAN's DNS has to resolve on the
+host too.
+
+`pi-5-16gb-srv-0` gets this for free: its `/etc/resolv.conf` is
+`nameserver 192.168.0.59`, which is AdGuard running on that same machine, and
+AdGuard has rewrites for `registry.internal.xboy.me` and
+`local-s3.internal.xboy.me` → `192.168.0.59`.
+
+`dell-amd64-srv` does not. It uses `systemd-resolved` (`127.0.0.53`) with a
+public upstream, which answers those names with **Cloudflare edge addresses**.
+containerd then connects to Cloudflare, which has no origin for them, and the
+pull dies with a message that looks like a certificate problem but is not:
+
+```
+failed to resolve image: failed to do request: Head
+"https://registry.internal.xboy.me/v2/ci-tools/manifests/sha256:...":
+remote error: tls: handshake failure
+```
+
+This surfaced when Jenkins agents moved onto dell (they follow the controller
+now), because every `ci-tools` and service image lives in that registry.
+
+Fixed by pinning both names in dell's `/etc/hosts` (backup at
+`/etc/hosts.bak-before-internal-registry`):
+
+```
+192.168.0.59 registry.internal.xboy.me
+192.168.0.59 local-s3.internal.xboy.me
+```
+
+`/etc/hosts` rather than `certs.d`/`skip_verify` on purpose: the registry's
+certificate is publicly trusted, so once the name resolves to the pi the
+handshake is normal and verification stays on. containerd re-reads this per
+pull, so nothing needs restarting.
+
+The broader fix is to point dell's resolver at AdGuard the way the pi does,
+which would cover the whole internal zone instead of two names. It is not done
+because it makes all of dell's DNS depend on the pi being up.
+
+Check either node without shelling into it — `dnsPolicy: Default` is what makes
+the pod use the *host's* resolver rather than coredns:
+
+```bash
+kubectl run dnscheck --rm -it --restart=Never --image=busybox:1.37 \
+  --overrides='{"spec":{"nodeName":"dell-amd64-srv","hostNetwork":true,"dnsPolicy":"Default"}}' \
+  -- nslookup registry.internal.xboy.me
+```
+
 ## 4. Check Cluster Status
 
 ```bash
