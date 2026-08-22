@@ -168,9 +168,30 @@ kubectl delete instancemanagers.longhorn.io -n longhorn-system <name>
 
 ## Migrating a hostpath volume to Longhorn
 
-`persistence.defaultClass` is `false`, so `microk8s-hostpath` is still the
-cluster default and nothing lands on Longhorn by accident mid-migration. Flip
-it once the last hostpath PVC is gone.
+**The migration is finished.** All ten volumes are on Longhorn, and
+`persistence.defaultClass` is now `true`, so a PVC with no `storageClassName`
+lands on Longhorn rather than back on a directory on the pi. The section below
+is kept because it is how the next one gets done - a rebuilt node, a restored
+backup, or a volume that arrives on hostpath by accident.
+
+| Namespace | Claim | Now on |
+|---|---|---|
+| `data` | `postgres-svc-pvc`, `postgres-ai-svc-pvc` | longhorn |
+| `jenkins` | `jenkins-home`, `buildkit-cache-pvc` | longhorn |
+| `vaultwarden` | `vaultwarden-data`, `postgres-data-postgres-0` | longhorn |
+| `xboy` | `postgres-root-pvc`, `postgres-xboy-pvc`, `postgres-foodiehub-pvc` | longhorn |
+| `ingress` | `traefik-data` | longhorn |
+
+[`migrate-pvc-to-longhorn.sh`](./migrate-pvc-to-longhorn.sh) does one volume,
+keeping the claim's name so no workload manifest has to change:
+
+```bash
+./migrate-pvc-to-longhorn.sh -n xboy -c postgres-root-pvc -w deploy/postgres-root
+```
+
+It refuses to start if the source PV is not `Retain` or if any pod still has the
+claim mounted, and it refuses to rebind unless the copy verified. The steps it
+runs, and why each one is there, are below.
 
 **Before anything else, make every PV undeletable.** The hostpath PVs were
 created with `persistentVolumeReclaimPolicy: Delete`, which means a fumbled
@@ -203,12 +224,48 @@ Then, one volume at a time, never two:
 The old hostpath directory is left in place as the rollback, which is what the
 `Retain` patch in step 0 is for. Reclaim it later, deliberately.
 
+### Reclaiming the ten rollback copies
+
+All ten hostpath PVs are sitting `Released` with their directories intact on the
+pi, under `/var/snap/microk8s/common/default-storage/`. Nothing uses them; they
+exist so a bad migration could be undone by pointing the claim back:
+
+```bash
+kubectl get pv -o json | jq -r '
+  .items[] | select(.spec.storageClassName=="microk8s-hostpath")
+  | [.metadata.name, .status.phase, .spec.hostPath.path] | @tsv'
+```
+
+That is worth real disk on a microSD card that has run over 90% full - the
+`traefik-data` copy alone is 273 MB, almost all of it one unrotated
+`access.log`. Deleting the PV does **not** delete the directory now that the
+policy is `Retain`, so reclaiming space is two steps: `kubectl delete pv <name>`
+and then remove the directory on the pi. Do it once you are satisfied the new
+volumes are good, and not before.
+
 Two shapes need extra care:
 
-- **ArgoCD-managed workloads.** `automated: {prune, selfHeal}` reverts live
-  `replicas` and `claimName` patches out from under the migration. Land the
-  `storageClassName` change in git *and* pause auto-sync for that app, then
-  re-enable it after.
+- **ArgoCD-managed workloads.** `automated: {prune, selfHeal}` reverts the
+  scale-to-zero out from under the migration, and `prune` will happily delete a
+  PVC that momentarily does not exist in git. Pause auto-sync **first**:
+
+  ```bash
+  kubectl -n argocd patch application <app> --type=json \
+    -p '[{"op":"remove","path":"/spec/syncPolicy/automated"}]'
+  ```
+
+  Then migrate, *then* land the `storageClassName` change in git, then restore
+  the app. That order matters: with the change in git while the old claim is
+  still bound, ArgoCD tries to patch an immutable field on a bound PVC and the
+  sync fails.
+
+  The app also needs `ignoreDifferences` on `/spec/volumeName` **and**
+  `RespectIgnoreDifferences=true` in `syncOptions`, because the migrated claim is
+  pre-bound to a generated PV name that cannot live in git. Without the second
+  one the sync keeps sending `volumeName: ""` and the API server keeps rejecting
+  it - `ignoreDifferences` alone only hides the field from the *diff*, not from
+  the apply. Working examples: `clusters/production/infra.yaml` in both the
+  `k8s-infra` and `xboy-k8s-infra` repos.
 - **StatefulSets.** `volumeClaimTemplates` is immutable, so changing the
   storage class needs `kubectl delete statefulset --cascade=orphan` and a
   recreate — the pods keep running while you do it.
