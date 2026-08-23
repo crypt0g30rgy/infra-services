@@ -1,0 +1,42 @@
+# Manifest digests that must never be deleted, one per line, `sha256:...`.
+#
+# Why this file exists: "keep the newest" is not the same as "keep what is
+# running". On 2026-08-23, 2 of the 24 images in use in the cluster were NOT the
+# newest in their repo - a rollback and a pinned tools image. Deleting those
+# would have left running pods unable to restart.
+#
+# This host cannot see the cluster, so it cannot work the list out by itself.
+# Regenerate it from a machine with kubectl (see README.md) and copy it here:
+#
+#   kubectl get pods -A -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.imageID}{"\n"}{end}{end}' \
+#     | grep registry.internal.example.com \
+#     | sed 's/.*@//' | sort -u
+#
+# Lines that are not digests are ignored (matching is exact, whole-line), so
+# comments are safe. A stale list is safe too - it only ever protects more.
+#
+# Generated 2026-08-23.
+sha256:04d51c064aae9ce105401fa77ac2791a0762b31593e98e0ae4739ea52010d31d
+sha256:0edd973555ef2c6e020887a264dc7a24f6ea779590258d9321644fd518a32e2e
+sha256:18d373f86ab7249df7633ce2dab04aae8ec2f37f06398d7a9bee8b7092b0d3e2
+sha256:1a72b760e4668dad3c98469b9ebe8fb12dcb02fd627c54bf25780261e2c38e80
+sha256:1b0920eac083610e4fa41d95c7b85389803c82b45bd62023018a87e01f0008ab
+sha256:23c8d907493e625ac335eca7992326a7cff22bbfd4cd12bf75af950927d9c13a
+sha256:3069516001c10f61c536a78189af35f429226322de6de37f775d38f5c5a54657
+sha256:30c4b337a0351a857c5a332548892153f88bec529263651c79ec7f28aab59084
+sha256:30d951f995b17546182819ffb4c3216b5d3d46bd9789063bb5c32e04ee95e3a3
+sha256:46728117bfcfca7dec904c7ea2829ca0fe4bb63414c398215b26207edfa17b79
+sha256:553ca9df0e8c2bbeea3c12b0076fa41e9b2da54804fd2dde877011215bf9a3c3
+sha256:56cc996c08cb9d0a382eba01928c348613bbabb83398be187067dc6af36ad163
+sha256:5866e5ae22b0b4b663a521ee955b4e49f5812eb0efc7fc5e933d992514ed2a05
+sha256:5f40db1552c30324958e30d6580ab536046ab27edfd02b7acddfd2624486d3ff
+sha256:6e7e125959426b3af55c6d6e6e8a421ac6c50b755a0c7f8a0aa5ac2c19357db9
+sha256:79320c23cdc2d89641f41817ec469b16ce13cd9fc510eaefbcfe36e225bc5a5d
+sha256:7caa75aab6d43786b71298bb9c6dec885befe1f24fe81601379d2cb894630c91
+sha256:a9f9a57fbd651357936523bd492505f933c93f59723ba19a6bbf23334981bd83
+sha256:c0e814eacd66ccfbd96447061b2ec0b8a151c11b6dca80a7ed0a8ac5ddd76a25
+sha256:c60392bce9254b377b8dfc43f935290e40f9a48f5c5bfbd25f04ed5169270954
+sha256:dfa8e498ee48a50a648940130ee2cbb920f5b73330eba2efd71bf88fd0d4b0f0
+sha256:e578d02a714fe6563fac09a85c0bb60d98258feeb285af62e8515ccc123f0137
+sha256:f86a87868aaecf46ba8f94f80fec4d53233ca1823b1443eb15eacef900d3c0ca
+sha256:fa1e1d619756c230ff2e22b54e9cbdd1f262c913e6eac5b8e124a94190b38053

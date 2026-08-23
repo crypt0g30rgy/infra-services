@@ -112,32 +112,77 @@ services:
           cpus: "0.10"
           memory: "64M"
 
-  # registry-cleaner:
-  #   image: alpine:3.24
-  #   container_name: registry-cleaner
-  #   depends_on:
-  #     - registry
-  #   networks:
-  #     - internal
-  #   volumes:
-  #     - ./cleanup-registry.sh:/cleanup.sh
-  #     - ./config.yml:/etc/docker/registry/config.yml
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   entrypoint: >
-  #     sh -c "
-  #     apk add --no-cache curl jq bash docker-cli &&
-  #     while true; do
-  #       echo 'Running registry cleanup';
-  #       bash /cleanup.sh &&
-  #       docker exec local-registry registry garbage-collect /etc/docker/registry/config.yml;
-  #       sleep 86400;
-  #     done"
-  #   restart: unless-stopped
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: "0.25"
-  #         memory: 128M
-  #       reservations:
-  #         cpus: "0.12"
-  #         memory: 56M
+  # Retention + garbage collection. Runs cleanup-registry.sh once on start and
+  # then daily at CLEANUP_AT (UTC).
+  #
+  # Built on registry:3.1.1 - the same image as the registry itself - for one
+  # reason: deleting a manifest through the v2 API only unlinks it, and the only
+  # thing that reclaims the blobs is `registry garbage-collect`, which needs the
+  # `registry` binary AND direct access to the storage directory. Hence
+  # ./data mounted read-write here.
+  #
+  # The version this replaces mounted /var/run/docker.sock to run
+  # `docker exec local-registry registry garbage-collect`. That hands a
+  # long-running container root-equivalent control of this host to save one bind
+  # mount. Mounting ./data directly does the same job with no privilege at all.
+  registry-cleaner:
+    image: registry:3.1.1
+    container_name: registry-cleaner
+    restart: unless-stopped
+    depends_on:
+      - registry
+    networks:
+      - internal
+    volumes:
+      # Read-WRITE on purpose: this is where garbage-collect deletes blobs.
+      - ./data:/var/lib/registry
+      - ./config.yml:/etc/docker/registry/config.yml:ro
+      - ./cleanup-registry.sh:/cleanup-registry.sh:ro
+      # Must exist as a FILE before `up`, or Docker helpfully creates a
+      # directory here and the in-use protection silently does nothing.
+      - ./protect-digests.txt:/protect-digests.txt:ro
+    environment:
+      # Straight to the container port on the internal network: no traefik, no
+      # TLS, no dependency on the public DNS name resolving from this host.
+      # htpasswd auth still applies - the registry enforces it on :5000 itself.
+      REGISTRY_URL: http://local-registry:5000
+      REGISTRY_USER: ${REGISTRY_CLEANER_USER}
+      REGISTRY_PASSWORD: ${REGISTRY_CLEANER_PASSWORD}
+      # Keep the newest manifest per repo forever, plus everything from the last
+      # 7 days. A manifest has to fail both tests to be deleted.
+      KEEP_LATEST: "1"
+      MAX_AGE_DAYS: "7"
+      PROTECT_TAGS: latest
+      PROTECT_DIGESTS_FILE: /protect-digests.txt
+      RUN_GC: "1"
+      LOOP: "1"
+      RUN_ON_START: "1"
+      # 03:30 UTC. distribution does not lock around garbage-collect, so a blob
+      # uploaded mid-GC can be collected before its manifest lands. Keep this at
+      # an hour when nothing pushes.
+      CLEANUP_AT: "03:30"
+      DRY_RUN: "0"
+    # The registry image's own entrypoint would start a registry, so replace it.
+    # curl and jq are not in the image; apk is. No arithmetic or $( ) in here -
+    # compose would try to interpolate it.
+    entrypoint: ["/bin/sh", "-c"]
+    # A one-element LIST, not a bare string: compose word-splits a string command
+    # shell-style, which would hand `sh -c` "for" as the script and the rest as
+    # positional args.
+    command:
+      - >
+        for i in 1 2 3 4 5; do apk add --no-cache curl jq && break;
+        echo "apk add failed, retrying in 10s"; sleep 10; done;
+        exec sh /cleanup-registry.sh
+    deploy:
+      resources:
+        limits:
+          # garbage-collect holds the set of referenced blob digests in memory,
+          # so this scales with manifest count. 256M matches the registry itself
+          # and leaves room; getting OOM-killed mid-sweep just leaves garbage
+          # behind for the next pass, but there is no reason to invite it.
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.12"
+          memory: 64M
