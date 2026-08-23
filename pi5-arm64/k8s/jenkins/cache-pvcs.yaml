@@ -19,22 +19,50 @@ spec:
   # than a microSD card, and which wins has not been measured. If builds get
   # slower, this is the first thing to look at.
   #
-  # Side effect worth knowing: ../../../../tdi-ci pod-template.yaml selects its
-  # agent node by kubernetes.io/arch, so an amd64 build lands on dell. While
+  # Side effect worth knowing: ../../../../tdi-ci pod-template.yaml used to select
+  # its agent node by kubernetes.io/arch, so an amd64 build landed on dell. While
   # this cache was hostpath-on-the-pi, such a build could not mount it at all.
-  # It can now - multi-arch CI actually works.
+  # It can now - multi-arch CI actually works. The pod template has since moved to
+  # a podAffinity on the Jenkins controller pod, partly for this very reason: the
+  # agent follows the controller, so it always lands on the node this volume was
+  # last attached to and never waits for a detach/reattach cycle.
   #
-  # The new limit is that ReadWriteOnce on Longhorn means one *node* at a time,
-  # strictly enforced (hostpath never really enforced it). Two builds on the
-  # same node still share the cache fine; an arm64 build and an amd64 build
-  # running concurrently will fight over it, and the second one to ask will fail
-  # to attach. Give the two arches separate cache PVCs if that starts happening.
+  # The limit that remains is that ReadWriteOnce on Longhorn means one *node* at a
+  # time, strictly enforced (hostpath never really enforced it). Two builds on the
+  # same node still share the cache fine; two on different nodes cannot, and the
+  # second one to ask will fail to attach. Give the two arches separate cache PVCs
+  # if that ever starts happening.
   storageClassName: longhorn
   resources:
     requests:
-      # Docker layer cache can grow quickly with multiple images/branches.
-      # Size this to your image sizes and branch/tag churn.
-      storage: 10Gi
+      # 40Gi, raised from 10Gi on 2026-08-23 because 10Gi was not enough and the
+      # way it ran out was a build failure, not a slow build:
+      #
+      #   [ERR_PNPM_ENOSPC] ... ENOSPC: no space left on device, mkdir
+      #     '/app/node_modules/.pnpm/typescript@5.9.3/...'
+      #   npm warn tar TAR_ENTRY_ERROR ENOSPC: no space left on device
+      #
+      # What lives here is buildkitd's whole state dir, and `snapshots/` is
+      # effectively all of it (5.8Gi of 6.2Gi when measured). One multi-arch node
+      # build writes four dependency trees into it - deps and prod-deps, amd64 and
+      # arm64 - then the build stage copies node_modules again per arch, and the
+      # services' Dockerfiles now also keep pnpm's store and metadata cache in
+      # BuildKit cache mounts, which live in the same snapshots dir and persist
+      # between builds on purpose (that is what makes `reused 406, downloaded 0`
+      # possible instead of refetching ~1000 packages every time).
+      #
+      # buildkitd's GC does work - usage fell back to 6.2Gi on its own after the
+      # failure - so this is a headroom problem at peak, not unbounded growth.
+      # dell's Longhorn disk had 412Gi available with 55Gi scheduled when this was
+      # raised, so 40Gi is cheap.
+      #
+      # Expansion is safe to do live and does not lose the cache: `kubectl -n
+      # jenkins patch pvc buildkit-cache-pvc -p '{"spec":{"resources":{"requests":
+      # {"storage":"40Gi"}}}}'`. Longhorn attaches the volume briefly, resizes the
+      # ext4 filesystem, and detaches again - measured going from 9.7G/2.3G-used to
+      # 39.3G with the same 6.2Gi of cache still there. Do it while no build is
+      # running, so the attach is Longhorn's and not a fight with an agent pod.
+      storage: 40Gi
 
 # --- # for sanity... build a multi arch jenkins ci builder
 # apiVersion: v1
