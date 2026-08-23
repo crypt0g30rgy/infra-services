@@ -1,3 +1,26 @@
+# XFS, not the default ext4 longhorn class, and that is the whole reason this
+# StorageClass exists. It is used by exactly one volume: the BuildKit cache
+# below. See the inode note on the PVC for what ext4 did.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-buildcache
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  # Same as the stock `longhorn` class except for fsType. One replica because
+  # this is a cache: losing it costs one slow build, and paying to replicate it
+  # would be paying to protect data that is rebuilt from scratch on demand.
+  dataEngine: v1
+  numberOfReplicas: "1"
+  staleReplicaTimeout: "30"
+  dataLocality: disabled
+  disableRevisionCounter: "true"
+  unmapMarkSnapChainRemoved: ignored
+  fsType: xfs
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -32,34 +55,63 @@ spec:
   # same node still share the cache fine; two on different nodes cannot, and the
   # second one to ask will fail to attach. Give the two arches separate cache PVCs
   # if that ever starts happening.
-  storageClassName: longhorn
+  #
+  # ---------------------------------------------------------------------------
+  # XFS, via the longhorn-buildcache class above, because ext4 ran out of INODES
+  # here on 2026-08-23 with a third of its bytes still free:
+  #
+  #   df -h  ->  39.3G size, 22.6G used, 16.7G available   (57%)
+  #   df -i  ->  2621440 inodes, 2621430 used, 10 free    (100%)
+  #
+  # The build failed as
+  #
+  #   error: failed to solve: ResourceExhausted: failed to copy files: ...
+  #     ReactNativeQueryRunner.js.map: no space left on device
+  #
+  # which reads as a disk-full failure and is not one. ENOSPC is also what the
+  # kernel returns when there are no free inodes, and that is what happened:
+  # mke2fs sizes the inode table once, at format time, at one inode per 16KiB of
+  # filesystem, and a node_modules tree averages ~9KiB per file. So this volume
+  # could hold 2.6M files no matter how many gigabytes were left, and one
+  # multi-arch node build writes four dependency trees plus pnpm's store into it.
+  # Growing the volume does add inodes (resize2fs adds block groups), which is
+  # exactly why the earlier 10Gi -> 40Gi expansion made this look fixed for one
+  # build and then failed again in the same way.
+  #
+  # XFS allocates inodes on demand out of free space instead of preallocating a
+  # fixed table, so the failure mode does not exist: a fresh 40Gi volume reports
+  # ~21M inodes and that number tracks the filesystem. The default imaxpct=25
+  # caps inode space at 25% of the volume, which at 40Gi is far more than the
+  # 2.6M files that broke ext4 - pass `-i maxpct=0` via the class's mkfsParams if
+  # that ever becomes the ceiling.
+  #
+  # Changing fsType means a reformat, so the PVC was deleted and recreated rather
+  # than converted. That is free here for the same reason as the hostpath
+  # migration above: the first build afterwards refetches its dependencies (5-8
+  # minutes) and every build after that is warm again.
+  storageClassName: longhorn-buildcache
   resources:
     requests:
-      # 40Gi, raised from 10Gi on 2026-08-23 because 10Gi was not enough and the
-      # way it ran out was a build failure, not a slow build:
+      # 40Gi, raised from 10Gi on 2026-08-23. What lives here is buildkitd's
+      # whole state dir, and `snapshots/` is effectively all of it (5.8Gi of
+      # 6.2Gi when first measured, 22.6G at the inode failure above). One
+      # multi-arch node build writes four dependency trees into it - deps and
+      # prod-deps, amd64 and arm64 - then the build stage copies node_modules
+      # again per arch, and the services' Dockerfiles also keep pnpm's store and
+      # metadata cache in BuildKit cache mounts, which live in the same snapshots
+      # dir and persist between builds on purpose (that is what makes
+      # `reused 406, downloaded 0` possible instead of refetching ~1000 packages
+      # every time).
       #
-      #   [ERR_PNPM_ENOSPC] ... ENOSPC: no space left on device, mkdir
-      #     '/app/node_modules/.pnpm/typescript@5.9.3/...'
-      #   npm warn tar TAR_ENTRY_ERROR ENOSPC: no space left on device
-      #
-      # What lives here is buildkitd's whole state dir, and `snapshots/` is
-      # effectively all of it (5.8Gi of 6.2Gi when measured). One multi-arch node
-      # build writes four dependency trees into it - deps and prod-deps, amd64 and
-      # arm64 - then the build stage copies node_modules again per arch, and the
-      # services' Dockerfiles now also keep pnpm's store and metadata cache in
-      # BuildKit cache mounts, which live in the same snapshots dir and persist
-      # between builds on purpose (that is what makes `reused 406, downloaded 0`
-      # possible instead of refetching ~1000 packages every time).
-      #
-      # buildkitd's GC does work - usage fell back to 6.2Gi on its own after the
-      # failure - so this is a headroom problem at peak, not unbounded growth.
-      # dell's Longhorn disk had 412Gi available with 55Gi scheduled when this was
-      # raised, so 40Gi is cheap.
+      # buildkitd's GC does work - usage fell back to 6.2Gi on its own after an
+      # earlier failure - so size here is a headroom problem at peak, not
+      # unbounded growth. dell's Longhorn disk had 412Gi available with 55Gi
+      # scheduled when this was raised, so 40Gi is cheap.
       #
       # Expansion is safe to do live and does not lose the cache: `kubectl -n
       # jenkins patch pvc buildkit-cache-pvc -p '{"spec":{"resources":{"requests":
       # {"storage":"40Gi"}}}}'`. Longhorn attaches the volume briefly, resizes the
-      # ext4 filesystem, and detaches again - measured going from 9.7G/2.3G-used to
+      # filesystem, and detaches again - measured going from 9.7G/2.3G-used to
       # 39.3G with the same 6.2Gi of cache still there. Do it while no build is
       # running, so the attach is Longhorn's and not a fight with an agent pod.
       storage: 40Gi
@@ -77,4 +129,4 @@ spec:
 #   resources:
 #     requests:
 #       # Just holds a single ~50-70MB binary.
-#       storage: 256Mi   
+#       storage: 256Mi
