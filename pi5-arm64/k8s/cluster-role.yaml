@@ -1,0 +1,210 @@
+# cluster-role.yaml
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: readonly-role
+# rules:
+# - apiGroups: [""]
+#   resources: ["pods", "services", "nodes", "configmaps", "namespaces"]
+#   verbs: ["get", "list", "watch"]
+# - apiGroups: ["apps"]
+#   resources: ["deployments", "replicasets", "statefulsets"]
+#   verbs: ["get", "list", "watch"]
+
+# Most read-only ops - no create/update/update
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: readonly-role
+rules:
+  # Core API
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/status
+      - pods/exec
+      - services
+      - endpoints
+      - endpointSlices
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - persistentvolumes
+      - namespaces
+      - nodes
+      - nodes/proxy
+      - nodes/status
+      - events
+      - resourcequotas
+      - limitranges
+      - replicationcontrollers
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Workloads
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - deployments/status
+      - replicasets
+      - replicasets/status
+      - daemonsets
+      - daemonsets/status
+      - statefulsets
+      - statefulsets/status
+      - controllerrevisions
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Batch
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+      - cronjobs
+      - cronjobs/status
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Autoscaling
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Networking
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - ingressclasses
+      - networkpolicies
+    verbs:
+      - get
+      - list
+      - watch
+
+  # RBAC (read only)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Storage
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+      - volumeattachments
+      - csidrivers
+      - csinodes
+      - csistoragecapacities
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Policy
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Certificates
+  - apiGroups: ["certificates.k8s.io"]
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Admission
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - list
+      - watch
+
+  # API registration
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources:
+      - apiservices
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Coordination
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Discovery
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Metrics Server (if installed)
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - nodes
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Custom Resource Definitions
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Gateway API (if installed)
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources:
+      - gatewayclasses
+      - gateways
+      - httproutes
+      - grpcroutes
+      - tcproutes
+      - tlsroutes
+      - udproutes
+      - referencegrants
+    verbs:
+      - get
+      - list
+      - watch
