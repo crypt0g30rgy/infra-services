@@ -1,0 +1,258 @@
+# Seed copy of AdGuard Home's configuration.
+#
+# This is NOT the live file. AdGuard owns /opt/adguardhome/conf/AdGuardHome.yaml
+# and rewrites it — in full, comments stripped — every time anything changes in
+# the web UI and on every schema migration. Bind-mounting a tracked file
+# straight into the container would therefore keep the working tree permanently
+# dirty and, because the container runs as root, root-owned mode 600.
+#
+# So: `./manage.sh up` copies this into ./config/ only when ./config is empty,
+# `./manage.sh diff` reports drift, and `./manage.sh save` copies the live file
+# back here with the admin hash re-masked. git is the seed and the audit trail;
+# the pi is the running state. See README.md.
+#
+# Captured from the live file 2026-08-25 (schema_version 34, v0.107.78) with
+# four deliberate changes from what was running, all marked FIX below.
+http:
+  pprof:
+    port: 6060
+    enabled: false
+  doh:
+    routes:
+      - GET /dns-query
+      - POST /dns-query
+      - GET /dns-query/{ClientID}
+      - POST /dns-query/{ClientID}
+    insecure_enabled: false
+  address: 0.0.0.0:3000
+  session_ttl: 30d
+users:
+  # Masked on purpose — the real value is a bcrypt hash of the admin password
+  # and this repo is not the place for it. A rebuild starts with DNS working and
+  # the UI unloginable, which is the right way round; paste the real hash in
+  # after copying the seed, or delete the whole `users:` block to get the setup
+  # wizard back. README.md has both.
+  - name: admin
+    password: "$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH_SEE_README"
+auth_attempts: 5
+block_auth_min: 15
+http_proxy: ""
+language: ""
+theme: auto
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  anonymize_client_ip: false
+  # Over-limit queries are DROPPED, not refused: the client gets no packet at
+  # all, so CoreDNS reports `read udp ... i/o timeout`, answers SERVFAIL, and
+  # node reports `EAI_AGAIN`. There is nothing in any log that says
+  # "rate limited". Measured against 192.168.0.59 at ratelimit 20: 10 q/s → 0
+  # of 60 failed, 25 q/s → 17 of 60 failed, 60 q/s → 40 of 60 failed.
+  ratelimit: 20
+  # FIX (was 24). 24 put every device in 192.168.0.0/24 into ONE 20 qps bucket:
+  # both cluster nodes, the pi itself, and every phone and TV on the LAN. A
+  # laptop syncing photos was spending the cluster's DNS budget. 32 gives each
+  # address its own bucket, which is what a trusted LAN wants.
+  ratelimit_subnet_len_ipv4: 32
+  ratelimit_subnet_len_ipv6: 56
+  # FIX (was []). The two microk8s nodes: .59 is the pi (and its own resolver),
+  # .60 is dell-amd64-srv, where the single CoreDNS replica runs. CoreDNS
+  # multiplexes every pod in the cluster through one source address, so a
+  # per-host limit is still the wrong shape for it — exempt it.
+  ratelimit_whitelist:
+    - 192.168.0.59
+    - 192.168.0.60
+  refuse_any: true
+  # FIX (second entry added). One upstream and `load_balance` is not
+  # redundancy: every cache miss was a single point of failure reached over
+  # DNS-over-HTTPS. Both are DoH so filtering and privacy are unchanged.
+  upstream_dns:
+    - https://unfiltered.adguard-dns.com/dns-query
+    - https://dns.quad9.net/dns-query
+  upstream_dns_file: ""
+  bootstrap_dns:
+    - 1.1.1.1
+  fallback_dns:
+    - 1.1.1.1
+  upstream_mode: load_balance
+  fastest_timeout: 1s
+  allowed_clients: []
+  disallowed_clients: []
+  # Why `dig version.bind chaos @192.168.0.59` times out. That is this setting,
+  # not a fault — do not use it as a health check.
+  blocked_hosts:
+    - version.bind
+    - id.server
+    - hostname.bind
+  trusted_proxies:
+    - 127.0.0.0/8
+    - ::1/128
+  cache_enabled: true
+  cache_size: 4194304
+  cache_ttl_min: 0
+  cache_ttl_max: 0
+  cache_optimistic: false
+  cache_optimistic_answer_ttl: 30s
+  cache_optimistic_max_age: 12h
+  bogus_nxdomain: []
+  aaaa_disabled: false
+  enable_dnssec: true
+  edns_client_subnet:
+    custom_ip: ""
+    enabled: false
+    use_custom: false
+  max_goroutines: 300
+  handle_ddr: true
+  ipset: []
+  ipset_file: ""
+  bootstrap_prefer_ipv6: false
+  # FIX (was 10s). CoreDNS's forward plugin gives up on an upstream after ~2s,
+  # so a 10s budget here meant CoreDNS SERVFAILed first and the answer AdGuard
+  # was still waiting for arrived for nobody. Fail over to the second upstream
+  # inside CoreDNS's window instead of after it.
+  upstream_timeout: 2s
+  private_networks: []
+  use_private_ptr_resolvers: false
+  local_ptr_upstreams: []
+  use_dns64: false
+  dns64_prefixes: []
+  serve_http3: false
+  use_http3_upstreams: false
+  serve_plain_dns: true
+  hostsfile_enabled: true
+  pending_requests:
+    enabled: true
+tls:
+  enabled: false
+  server_name: ""
+  force_https: false
+  port_https: 443
+  port_dns_over_tls: 853
+  port_dns_over_quic: 853
+  port_dnscrypt: 0
+  dnscrypt_config_file: ""
+  certificate_chain: ""
+  private_key: ""
+  certificate_path: ""
+  private_key_path: ""
+  strict_sni_check: false
+querylog:
+  dir_path: ""
+  ignored: []
+  # 90 days of every query on the LAN is a 417 MB querylog.json on the pi's SD
+  # storage. Left as it was found, but it is the first thing to trim (30d) if
+  # disk or AdGuard's startup time becomes a problem.
+  interval: 90d
+  size_memory: 1000
+  enabled: true
+  file_enabled: true
+  ignored_enabled: false
+statistics:
+  dir_path: ""
+  ignored: []
+  interval: 1d
+  enabled: true
+  ignored_enabled: false
+filters:
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    name: AdGuard DNS filter
+    id: 1
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+    name: AdAway Default Blocklist
+    id: 2
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_60.txt
+    name: HaGeZi's Xiaomi Tracker Blocklist
+    id: 1785303685
+whitelist_filters: []
+user_rules:
+  - '@@||apps.admob.com^$client=''192.168.0.3'''
+  - ""
+dhcp:
+  enabled: false
+  interface_name: ""
+  local_domain_name: lan
+  dhcpv4:
+    gateway_ip: ""
+    subnet_mask: ""
+    range_start: ""
+    range_end: ""
+    lease_duration: 86400
+    icmp_timeout_msec: 1000
+    options: []
+  dhcpv6:
+    range_start: ""
+    lease_duration: 86400
+    ra_slaac_only: false
+    ra_allow_slaac: false
+filtering:
+  blocking_ipv4: ""
+  blocking_ipv6: ""
+  blocked_services:
+    schedule:
+      time_zone: Europe/Moscow
+    ids: []
+  protection_disabled_until: null
+  safe_search:
+    enabled: false
+    bing: true
+    duckduckgo: true
+    ecosia: true
+    google: true
+    pixabay: true
+    yandex: true
+    youtube: true
+  blocking_mode: default
+  parental_block_host: family-block.dns.adguard.com
+  safebrowsing_block_host: standard-block.dns.adguard.com
+  # Load-bearing for the cluster. `local-s3.internal.example.com` (MinIO) and the
+  # rest of the internal names resolve to the pi through this rewrite. CoreDNS
+  # also has a `hosts` entry pinning local-s3 to the same address, added because
+  # this lookup used to time out intermittently — which was the rate limit
+  # above, not this rewrite.
+  rewrites:
+    - domain: '*.internal.example.com'
+      answer: 192.168.0.59
+      enabled: true
+  safe_fs_patterns:
+    - /opt/adguardhome/work/userfilters/*
+  max_http_size: 256MB
+  safebrowsing_cache_size: 1048576
+  safesearch_cache_size: 1048576
+  parental_cache_size: 1048576
+  cache_time: 30
+  filters_update_interval: 24
+  blocked_response_ttl: 10
+  filtering_enabled: true
+  rewrites_enabled: true
+  parental_enabled: false
+  safebrowsing_enabled: false
+  protection_enabled: true
+clients:
+  runtime_sources:
+    whois: true
+    arp: true
+    rdns: true
+    dhcp: true
+    hosts: true
+  persistent: []
+log:
+  enabled: true
+  file: ""
+  max_backups: 0
+  max_size: 100
+  max_age: 3
+  compress: false
+  local_time: false
+  verbose: false
+os:
+  group: ""
+  user: ""
+  rlimit_nofile: 0
+# Do not hand-edit. AdGuard migrates the file when it starts and rewrites this
+# number; a wrong value makes it migrate a config that has already been
+# migrated.
+schema_version: 34

@@ -1,20 +1,84 @@
+# AdGuard Home — the LAN's DNS server, and the microk8s cluster's upstream
+# resolver. CoreDNS has `forward . /etc/resolv.conf` and both nodes' resolv.conf
+# is `nameserver 192.168.0.59`, so every name a pod looks up that is not a
+# cluster name arrives here. Breaking this file breaks the cluster.
+#
+# It runs on the pi out of /home/w3b/adguard, which is NOT a checkout of this
+# repo — see README.md. This file is the transcription of what is actually
+# there; keep them equal.
 services:
   adguardhome:
     image: adguard/adguardhome:v0.107.78
     container_name: adguardhome
     restart: unless-stopped
     networks:
-      pihole_macvlan: # check ~/setup-macvlan.sh or in git
-        ipv4_address: 192.168.1.98   # Choose an unused IP in your LAN
+      # Plain user-defined bridge (172.19.0.0/16), shared with traefik and the
+      # monitoring stack. `./manage.sh up` creates it if it is missing, the same
+      # way ../monitoring/manage.sh does.
       internal:
+      # NOT macvlan. This block used to be live in this file, uncommented,
+      # asking for 192.168.1.98 — a different /24 from the LAN, on a network
+      # `setup-macvlan.sh` builds as 192.168.1.0/24 while ../pi-hole's compose
+      # documents the same name as 192.168.0.0/24. Bringing AdGuard up that way
+      # gives it an address nothing on 192.168.0.0/24 can reach, publishes no
+      # ports, and takes DNS out for the whole cluster. Leave it commented.
+      # macvlan_net:
+      #   ipv4_address: 192.168.1.98
+    ports:
+      # Published on 0.0.0.0, which is what makes 192.168.0.59:53 answer. Note
+      # that a published UDP port on a bridge network is served by a userspace
+      # `docker-proxy` process, not by kernel NAT — every DNS packet in the
+      # cluster is copied through it. It works, but it is a hop that would not
+      # exist if AdGuard were on the host network.
+      - "3000:3000"
+      - "53:53/tcp"
+      - "53:53/udp"
     volumes:
+      # All of the state, and the only two paths worth keeping:
+      #   ./config/AdGuardHome.yaml  the entire configuration, ~4 KB
+      #   ./work                     query log, statistics, downloaded filters
+      #                              (~420 MB — .gitignore'd, do not commit)
+      # The container is disposable. `docker compose down` and `up` loses
+      # nothing as long as these two directories survive.
       - ./work:/opt/adguardhome/work
       - ./config:/opt/adguardhome/conf
     environment:
       - TZ=Europe/Moscow
+    labels:
+      - "traefik.enable=true"
+
+      # --------------------------
+      # Internal Router
+      # --------------------------
+      # ADGUARD_INTERNAL_HOST comes from ./.env, which is not in this repo
+      # (`*.env*` is gitignored). README.md has the one line it needs.
+      - "traefik.http.routers.adguard.rule=Host(`${ADGUARD_INTERNAL_HOST}`)"
+      - "traefik.http.routers.adguard.entrypoints=websecure"
+      - "traefik.http.routers.adguard.tls=true"
+      - "traefik.http.routers.adguard.tls.certresolver=myresolver"
+
+      # --------------------------
+      # Shared Service
+      # --------------------------
+      - "traefik.http.services.adguard.loadbalancer.server.port=3000"
+
+    # Compose v2 honours these outside swarm; verified applied on the running
+    # container (NanoCpus 250000000, Memory 268435456). A quarter of a core is
+    # not much for a resolver whose only upstream is DNS-over-HTTPS — every
+    # cache miss is a TLS handshake and an HTTP/2 round trip on that budget.
+    # Raise it before blaming the network if latency is the symptom.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.12"
+          memory: 128M
 
 networks:
   internal:
     external: true
-  pihole_macvlan:
-    external: true
+  # See the macvlan note above before uncommenting anything here.
+  # macvlan_net:
+  #   external: true
