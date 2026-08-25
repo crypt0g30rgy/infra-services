@@ -1,0 +1,11 @@
+# AdGuard's own runtime state. `work/` is the query log (417 MB with
+# `querylog.interval: 90d`), the statistics database, the session database and
+# the downloaded filter lists — all of it re-derivable and none of it reviewable
+# in a diff.
+work/
+
+# The live configuration. AdGuard rewrites this file in full whenever anything
+# changes in the web UI, as root mode 600, so tracking it would mean a working
+# tree that is permanently dirty and unreadable without sudo — and it holds the
+# admin bcrypt hash. AdGuardHome.seed.yaml is the tracked copy; see README.md.
+config/
