@@ -54,16 +54,78 @@ data:
       terminatingStatusCode: 204
 
     entryPoints:
+      # forwardedHeaders.trustedIPs decides, per peer, whether traefik *appends* to
+      # X-Forwarded-For or *replaces* it with the socket address. That single choice is what
+      # every rate limit, internal-traffic exemption and audit field downstream keys on:
+      #
+      #   peer in this list      -> append, so the client address Cloudflare wrote survives
+      #   peer not in this list  -> replace, so a caller cannot state their own address
+      #
+      # Both paths into this cluster are covered:
+      #
+      #   tunnelled  client -> Cloudflare -> cloudflared (in-cluster pod) -> traefik
+      #              traefik's peer is the cloudflared pod, so 10.1.0.0/16 is what makes it
+      #              work. This is the only path in use today: cloudflared's config.yml
+      #              routes xboy.me, tdi.solutions and both wildcards to
+      #              traefik-external.ingress.svc.cluster.local, and traefik-external is a
+      #              LoadBalancer on 192.168.1.201 — a LAN address, not publicly routable.
+      #   proxied    client -> Cloudflare -> traefik
+      #              traefik's peer is a Cloudflare edge address, which is why the ranges
+      #              below are here. Without them traefik replaces X-Forwarded-For with the
+      #              edge address and every caller behind one Cloudflare PoP collapses into a
+      #              single rate-limit bucket. Inert until a DNS record is pointed at a
+      #              publicly reachable origin instead of the tunnel — at which point it is
+      #              load-bearing, and the failure is silent.
+      #
+      # api-gw already holds up the matching half: TRUSTED_PROXY_IPS is
+      # "loopback,uniquelocal,cloudflare" in config-svc's api-gw-svc/.env.production, where
+      # uniquelocal covers traefik's own pod address and the cloudflare token expands to the
+      # same published ranges, fetched at boot.
+      #
+      # NEVER put 0.0.0.0/0 here, and never widen this to a range the platform does not
+      # control: that hands any caller the ability to state their own address, which is the
+      # rate-limit bypass this list exists to prevent.
+      #
+      # The list is Cloudflare's published edge ranges from
+      # https://api.cloudflare.com/client/v4/ips, retrieved 2026-08-25. It changes rarely but
+      # it does change, and traefik cannot fetch it — static config is read once at start.
+      # Re-check it when touching this file; api-gw's copy refreshes itself and this one does
+      # not, so this is the half that goes stale.
       web:
         address: :80
         forwardedHeaders:
-          trustedIPs:
+          # Anchored and aliased by websecure below: the two entrypoints must agree, and
+          # keeping one copy is what stops them drifting apart.
+          trustedIPs: &trustedIPs
             - 10.1.0.0/16
+            # Cloudflare IPv4
+            - 173.245.48.0/20
+            - 103.21.244.0/22
+            - 103.22.200.0/22
+            - 103.31.4.0/22
+            - 141.101.64.0/18
+            - 108.162.192.0/18
+            - 190.93.240.0/20
+            - 188.114.96.0/20
+            - 197.234.240.0/22
+            - 198.41.128.0/17
+            - 162.158.0.0/15
+            - 104.16.0.0/13
+            - 104.24.0.0/14
+            - 172.64.0.0/13
+            - 131.0.72.0/22
+            # Cloudflare IPv6
+            - 2400:cb00::/32
+            - 2606:4700::/32
+            - 2803:f800::/32
+            - 2405:b500::/32
+            - 2405:8100::/32
+            - 2a06:98c0::/29
+            - 2c0f:f248::/32
       websecure:
         address: :443
         forwardedHeaders:
-          trustedIPs:
-            - 10.1.0.0/16
+          trustedIPs: *trustedIPs
       metrics:
         address: :8082
       traefik:
