@@ -6,6 +6,20 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 2
+  # A ReadWriteOnce claim cannot be attached to two pods at once, and a rolling update
+  # wants the new pod Ready before it removes the old one - which never happens, because
+  # the new pod cannot mount the volume. `maxSurge: 0` takes the few seconds of downtime
+  # instead, on a single-replica dashboard.
+  #
+  # Not `type: Recreate`, which is the more obvious spelling of the same intent: the API
+  # server has already defaulted `spec.strategy.rollingUpdate` on the live Deployment, and
+  # an apply that switches the type while that field is still set is rejected with
+  # `spec.strategy.rollingUpdate: Forbidden`.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: grafana
@@ -14,12 +28,86 @@ spec:
       labels:
         app: grafana
     spec:
+      # 472 is the `grafana` user in the official image. fsGroup is what makes the
+      # freshly provisioned longhorn volume writable by it; without it Grafana exits with
+      # "failed to connect to database: unable to open database file".
+      securityContext:
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
       containers:
       - name: grafana
         image: grafana/grafana:13.1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
+        env:
+        # Both of these are calls out to grafana.com on a timer - usage reporting and the
+        # version/plugin update check. They are also a standing share of this cluster's
+        # failing DNS: `grafana.com` was one of the names timing out upstream while the
+        # resolver was struggling, for a feature nobody here uses.
+        - name: GF_ANALYTICS_REPORTING_ENABLED
+          value: "false"
+        - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+          value: "false"
+        volumeMounts:
+        # The SQLite database and anything built through the UI. See grafana-pvc.yaml.
+        - name: data
+          mountPath: /var/lib/grafana
+        - name: datasources
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        - name: dashboards-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: dashboards
+          mountPath: /etc/grafana/dashboards
+          readOnly: true
+        # /api/health answers without auth and reports the database as well as the
+        # process, which is the failure this Deployment is most likely to have now that
+        # there is a volume to fail to mount.
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 5
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: grafana-data
+      - name: datasources
+        configMap:
+          name: grafana-datasources
+      - name: dashboards-provider
+        configMap:
+          name: grafana-dashboards-provider
+      # Projected, because the two dashboards are separate ConfigMaps - one per dashboard
+      # keeps each diff readable and keeps both well inside the 1 MiB limit on a single
+      # ConfigMap - and they have to arrive in the same directory for one provider to pick
+      # them up.
+      - name: dashboards
+        projected:
+          sources:
+          - configMap:
+              name: grafana-dashboard-cluster
+          - configMap:
+              name: grafana-dashboard-app
 ---
 apiVersion: v1
 kind: Service

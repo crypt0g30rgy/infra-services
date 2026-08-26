@@ -1,0 +1,30 @@
+# Tells Grafana where the file-provisioned dashboards are.
+#
+# The JSON itself is in grafana-dashboard-cluster.yaml and grafana-dashboard-app.yaml,
+# projected into /etc/grafana/dashboards - deliberately outside /var/lib/grafana, which is
+# the persistent claim, so a provisioned dashboard is never half-owned by both the
+# ConfigMap and the database.
+#
+# `allowUiUpdates: false` because these two are code: an edit made in the UI would be
+# reverted the next time Grafana reloads the directory, and silently. Use "Save as copy"
+# to build on them - copies live in the database, which now persists - or edit the
+# ConfigMap and re-apply.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: platform
+        orgId: 1
+        folder: Platform
+        type: file
+        disableDeletion: false
+        allowUiUpdates: false
+        updateIntervalSeconds: 30
+        options:
+          path: /etc/grafana/dashboards
+          foldersFromFilesStructure: false
