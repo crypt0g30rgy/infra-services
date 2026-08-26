@@ -43,7 +43,7 @@ spec:
               mountPath: /data
       containers:
         - name: traefik
-          image: traefik:v3.7.9
+          image: traefik:v3.7.11
           args:
             - --configfile=/etc/traefik/traefik.yaml
           env:
