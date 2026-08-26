@@ -19,9 +19,26 @@ spec:
         imagePullPolicy: IfNotPresent
         args:
           - -config.file=/etc/promtail/promtail.yaml
+        env:
+        # The node this pod is on, which is what the `__host__` relabel in
+        # promtail-configmap.yaml is compared against. Left unset, promtail uses
+        # its own hostname - the pod name - which matches no node, so every
+        # discovered target is dropped and nothing is tailed.
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         volumeMounts:
         - name: config
           mountPath: /etc/promtail
+        # Where promtail-configmap.yaml puts positions.yaml. Without this mount
+        # the directory does not exist in the container, so every single write of
+        # the read offsets failed - 2332 of them in 12 hours per pod, one per
+        # write - and promtail had no memory of how far it had read. On restart
+        # it re-read or skipped whole files, which is why Loki has both gaps and
+        # duplicates.
+        - name: positions
+          mountPath: /run/promtail
         - name: varlog
           mountPath: /var/log
         - name: containers
@@ -31,9 +48,21 @@ spec:
       - name: config
         configMap:
           name: promtail-config
+      # hostPath, not emptyDir: an emptyDir dies with the pod, which loses the
+      # offsets on every restart and leaves the same gaps - quietly, this time,
+      # since the writes would succeed. DirectoryOrCreate because /run/promtail
+      # does not exist on a fresh node.
+      - name: positions
+        hostPath:
+          path: /run/promtail
+          type: DirectoryOrCreate
       - name: varlog
         hostPath:
           path: /var/log
+      # Docker-era and vestigial on this containerd cluster - /var/lib/docker
+      # does not exist on either node, and __path__ in the ConfigMap reads
+      # /var/log/pods. Left in place rather than removed in the same change as
+      # the positions fix.
       - name: containers
         hostPath:
           path: /var/lib/docker/containers
