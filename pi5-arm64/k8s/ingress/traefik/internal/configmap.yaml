@@ -9,15 +9,36 @@ data:
       level: INFO
       format: json
 
+    # stdout, not a file. Three things follow from that, and all three are the point:
+    #
+    #   * promtail tails container stdout out of /var/log/pods, so the access log now
+    #     reaches Loki and can be queried. While it went to /data/logs/access.log on an RWO
+    #     longhorn volume nothing could read it but a `kubectl exec` - which is why traefik's
+    #     request paths and client IPs were invisible in Grafana while traefik's own
+    #     prometheus metrics (which have no label for either, by design - both are unbounded
+    #     cardinality) were the only thing available. The traefik dashboard's "top paths" and
+    #     "top client IPs" panels are Loki queries against these lines.
+    #   * The volume stops being a place logs accumulate. access.log had reached 287 MB on a
+    #     1 Gi volume once already, and the logrotate sidecar that fixed that has been
+    #     removed along with this filePath - there is nothing left for it to rotate.
+    #   * Retention becomes Loki's 30 days instead of the sidecar's "3 files of 50 MiB".
+    #
+    # No `bufferingSize`. It was 100, meaning up to 100 entries were held in memory before
+    # being written; at this cluster's request rate that is minutes of delay before a line
+    # appears, which is fine for a file nobody reads and useless for a dashboard.
+    #
+    # No `filters` either, and that is the substantive change. They were:
+    #     statusCodes: 400-599 / retryAttempts: true / minDuration: 10ms
+    # which are OR'd, so a request was logged if it failed OR was retried OR took longer
+    # than 10ms - and dropped otherwise. Fast successful requests were therefore absent, so
+    # any per-path or per-IP count taken from these lines was a count of *slow and failed*
+    # requests wearing the label "requests". A top-talkers panel built on that is worse than
+    # no panel. The cost of logging everything is about 17 MB/day of raw JSON at current
+    # volume - single-digit MB/day once Loki compresses it, against a 5 Gi claim.
+    #
+    # `format: json` is load-bearing now: every Loki query here starts with `| json`.
     accessLog:
-      filePath: /data/logs/access.log
       format: json
-      bufferingSize: 100
-      filters:
-        statusCodes:
-          - "400-599"
-        retryAttempts: true
-        minDuration: "10ms"
       fields:
         defaultMode: keep
         names:
@@ -43,10 +64,21 @@ data:
           - 5.0
         entryPoint: metrics
 
+    # There is no `observability` namespace in this cluster and there never has been - the
+    # endpoint here was `jaeger.observability.svc.cluster.local:4317`, which does not resolve,
+    # so every span traefik has produced was dropped at the exporter. It looked configured.
+    # The access log has carried a real TraceId on every line the whole time, and following
+    # one into Jaeger found nothing, because the entry span was never delivered: traces
+    # started at api-gw, missing the hop that says how long the ingress itself took.
+    #
+    # Now the collector in `monitoring`, not jaeger directly, which is where every service
+    # sends its traces. Same reasons as for them: the collector is the only thing that
+    # derives spanmetrics, so traefik's spans become RED metrics too, and it batches and
+    # retries where a direct exporter drops on the floor when jaeger restarts.
     tracing:
       otlp:
         grpc:
-          endpoint: jaeger.observability.svc.cluster.local:4317
+          endpoint: otel-collector.monitoring.svc.cluster.local:4317
           insecure: true
 
     ping:
