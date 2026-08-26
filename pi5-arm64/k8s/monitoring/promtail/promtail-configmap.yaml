@@ -40,6 +40,20 @@ data:
 
       relabel_configs:
 
+      # Which node's pods this promtail is responsible for. `role: pod` discovers
+      # every pod in the cluster, and promtail keeps only the targets whose
+      # `__host__` equals its own hostname - so with this label unset, every
+      # target was dropped, on both nodes. That is the difference between "the
+      # positions file says `positions: {}`" and "logs reach Loki"; it is also
+      # invisible, because a promtail tailing nothing is Running and Ready and
+      # logs no error.
+      #
+      # Paired with HOSTNAME in promtail-daemonset.yaml, which has to be the NODE
+      # name: promtail's own hostname is the pod name, which never matches
+      # `__meta_kubernetes_pod_node_name` for anything.
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: __host__
+
       # namespace
       - source_labels: [__meta_kubernetes_namespace]
         target_label: namespace
