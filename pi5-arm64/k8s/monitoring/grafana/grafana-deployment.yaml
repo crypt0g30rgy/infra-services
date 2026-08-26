@@ -97,10 +97,11 @@ spec:
       - name: dashboards-provider
         configMap:
           name: grafana-dashboards-provider
-      # Projected, because the two dashboards are separate ConfigMaps - one per dashboard
-      # keeps each diff readable and keeps both well inside the 1 MiB limit on a single
-      # ConfigMap - and they have to arrive in the same directory for one provider to pick
-      # them up.
+      # Projected, because each dashboard is its own ConfigMap - one per dashboard keeps
+      # each diff readable and keeps every one of them well inside the 1 MiB limit on a
+      # single ConfigMap - and they have to arrive in the same directory for one provider to
+      # pick them up. Adding a dashboard means a new ConfigMap *and* a source here; a
+      # ConfigMap that exists but is not listed is applied, healthy and invisible.
       - name: dashboards
         projected:
           sources:
@@ -108,6 +109,8 @@ spec:
               name: grafana-dashboard-cluster
           - configMap:
               name: grafana-dashboard-app
+          - configMap:
+              name: grafana-dashboard-traefik
 ---
 apiVersion: v1
 kind: Service

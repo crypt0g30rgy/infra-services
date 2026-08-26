@@ -34,13 +34,17 @@ spec:
       securityContext:
         fsGroup: 65532
       initContainers:
+        # /data/logs is gone from here: the access log goes to stdout now, so nothing writes
+        # into that directory. /data/acme stays, empty and mode 700, because it is where the
+        # ACME store goes if the resolver in traefik.yaml is ever restored - and creating it
+        # after the fact means getting the ownership right by hand on a live volume.
         - name: init-dirs
           image: alpine:3.24
           command:
             - /bin/sh
             - -c
             - |
-              mkdir -p /data/logs /data/acme
+              mkdir -p /data/acme
               chown -R 65532:65532 /data
               chmod 700 /data/acme
           securityContext:
@@ -103,83 +107,18 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
 
-        # Rotates /data/logs/access.log. Deliberately plain shell rather than the
-        # logrotate package, for two reasons that both bit the previous version:
+        # No logrotate sidecar. There was one - a plain-shell size-capped rotator, itself a
+        # rewrite of a broken `apk add logrotate` version - and it is gone because the thing
+        # it rotated is gone: traefik's accessLog now writes to stdout, so the log is the
+        # kubelet's to rotate and Loki's to retain, and /data/logs is never created.
         #
-        #   * It used `apk add --no-cache logrotate >/dev/null 2>&1`, so on a node
-        #     that cannot reach dl-cdn.alpinelinux.org (the pi - every Cloudflare
-        #     IPv4 edge is unreachable from it) logrotate was never installed and
-        #     the sidecar became a no-op that still reported Running.
-        #   * Its config said `su 65532 65532`. logrotate resolves those through
-        #     getpwnam/getgrnam, the alpine image has no such user or group, and
-        #     it answered `unknown group '65532'` -> `skipping` -> `Handling 0
-        #     logs`. So even on a node where the install worked it rotated
-        #     nothing. access.log reached 287 MB on a 1 Gi volume this way.
-        #
-        # No package, no name lookup, nothing to install: it cannot fail that way
-        # again, and it says what it did on stdout so the next failure is visible
-        # in `kubectl logs`.
-        - name: logrotate
-          image: alpine:3.24
-          # Not root. /data/logs is owned by 65532 and fsGroup makes it writable,
-          # which is the whole reason the `su` directive existed - so drop both.
-          securityContext:
-            runAsUser: 65532
-            runAsGroup: 65532
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -u
-              LOG=/data/logs/access.log
-              # 50 MiB x (1 live + 3 kept) plus one in-flight copy is ~250 MiB of
-              # the 1 Gi volume. Raise both together, and against that number.
-              MAX=$((50 * 1024 * 1024))
-              KEEP=3
-              # Every 5 minutes, not daily: a size cap checked once a day is not a
-              # size cap. The old sidecar slept 86400 between attempts.
-              INTERVAL=300
-
-              while true; do
-                if [ -f "$LOG" ]; then
-                  SIZE=$(wc -c < "$LOG")
-                  if [ "$SIZE" -gt "$MAX" ]; then
-                    echo "$(date -Iseconds) rotating $LOG ($SIZE bytes)"
-                    i=$KEEP
-                    while [ "$i" -gt 1 ]; do
-                      p=$((i - 1))
-                      [ -f "$LOG.$p" ] && mv "$LOG.$p" "$LOG.$i"
-                      i=$p
-                    done
-                    # copy-then-truncate, i.e. logrotate's copytruncate. traefik
-                    # holds this file open and is not signalled, so the inode has
-                    # to stay put; mv would leave it writing to a file no longer
-                    # named anything. The writes between cp and truncate are lost
-                    # - that trade is inherent to copytruncate and is why the
-                    # window is kept to one copy.
-                    if cp "$LOG" "$LOG.1"; then
-                      : > "$LOG"
-                      echo "$(date -Iseconds) rotated; kept $LOG.1..$LOG.$KEEP"
-                    else
-                      echo "$(date -Iseconds) copy FAILED, leaving $LOG alone" >&2
-                    fi
-                  fi
-                fi
-                sleep "$INTERVAL"
-              done
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 100m
-              memory: 64Mi
-          volumeMounts:
-            - name: data
-              mountPath: /data
+        # This is worth spelling out because removing it looks like removing a safety
+        # measure. It is the opposite: a rotator watching a file that will never again be
+        # written cannot fire, so keeping it would have left the 287 MB of already-rotated
+        # access.log.* on the volume permanently, under a sidecar that reported healthy while
+        # doing nothing. Those files were deleted when this landed. If accessLog ever goes
+        # back to a filePath, this comes back with it - and stdout is the reason the traefik
+        # dashboard can query request paths and client IPs at all.
 
       volumes:
         - name: config
