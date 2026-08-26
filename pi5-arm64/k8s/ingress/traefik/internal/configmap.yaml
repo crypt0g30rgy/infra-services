@@ -136,17 +136,31 @@ data:
         allowCrossNamespace: true
       kubernetesIngress:
         allowExternalNameServices: true
+        # Write this Service's address back into the `status.loadBalancer` of every
+        # Ingress traefik serves. Without it traefik routes the Ingress perfectly and
+        # never touches its status, which stays empty — and an Ingress with an empty
+        # `status.loadBalancer.ingress` is what ArgoCD reads as "not healthy yet", so
+        # `apps-production` sat at Progressing indefinitely over three working
+        # Ingresses. Nothing else consumes the field here; this exists to stop
+        # permanent yellow in the ArgoCD UI, which is how a real regression gets missed.
+        ingressEndpoint:
+          publishedService: ingress/traefik-external
 
-    certificatesResolvers:
-      letsencrypt-internal:
-        acme:
-          storage: /data/acme/acme.json
-          dnsChallenge:
-            provider: cloudflare
-            resolvers:
-              - "1.1.1.1:53"
-              - "1.0.0.1:53"
-
+    # No certificatesResolvers. There was a `letsencrypt-internal` ACME resolver here,
+    # DNS-01 through Cloudflare, and it had never issued a certificate: no Ingress or
+    # IngressRoute in the cluster names a certResolver, none of them declare `spec.tls`,
+    # and /data/acme/acme.json was still 0 bytes a month after it was created. Every
+    # hostname is fronted by the cloudflared tunnel, so TLS terminates at Cloudflare and
+    # traefik only ever serves plaintext behind it.
+    #
+    # What the block did do was make the deployment require a `cloudflare-api-token`
+    # secret. That secret was deleted; traefik kept running because it had already
+    # resolved the env var, and the next restart - a day later, for an unrelated config
+    # change - could not create the container at all. Restore this together with the env
+    # var in deployment.yaml if the tunnel is ever removed and traefik has to terminate
+    # TLS itself, and give it a real DNS API token (`cloudflare-token` in this namespace
+    # is the cloudflared *tunnel* token, which is a different credential and will not
+    # solve a DNS challenge).
     api:
       dashboard: true
       insecure: true

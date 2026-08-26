@@ -8,11 +8,18 @@ metadata:
     app.kubernetes.io/name: traefik
 spec:
   replicas: 1
+  # One replica holding an RWO longhorn volume (`traefik-data`, the ACME store), so the
+  # surge has to be zero: with maxSurge 1 / maxUnavailable 0 the replacement pod is
+  # created while the old one still holds the volume, and if the scheduler puts it on the
+  # other node it waits on a Multi-Attach error forever. The old pod keeps serving, so
+  # that failure mode is a rollout that never finishes rather than an outage — which is
+  # worse, because it is silent. Stopping first costs a few seconds of ingress downtime on
+  # every config change, which is the honest price of a single-replica ingress.
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: traefik
@@ -46,12 +53,16 @@ spec:
           image: traefik:v3.7.11
           args:
             - --configfile=/etc/traefik/traefik.yaml
-          env:
-            - name: CF_DNS_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: cloudflare-api-token
-                  key: token
+          # No env. There used to be a CF_DNS_API_TOKEN here, read from a
+          # `cloudflare-api-token` secret, for the ACME dnsChallenge resolver that has now
+          # been removed from traefik.yaml — see the comment there for why (nothing
+          # requests a certResolver; TLS terminates at Cloudflare).
+          #
+          # That secret no longer exists in the cluster. A running pod resolves secretKeyRef
+          # once, at start, so traefik went on serving for a day after it was deleted and
+          # the first restart after that failed with CreateContainerConfigError — ingress
+          # down, for a credential that was feeding a code path with no callers. An env var
+          # nobody uses is not free: it is a landmine armed on the next restart.
           ports:
             - name: web
               containerPort: 80

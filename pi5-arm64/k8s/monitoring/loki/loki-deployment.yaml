@@ -6,6 +6,15 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 2
+  # Single replica on an RWO volume, so the replacement pod cannot be created while the old
+  # one still holds it: with the default maxSurge 1 / maxUnavailable 0 the new pod waits on
+  # a Multi-Attach error if the scheduler puts it on the other node, and the rollout hangs
+  # instead of failing. Same reasoning as grafana and traefik.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: loki
@@ -13,15 +22,74 @@ spec:
     metadata:
       labels:
         app: loki
+      annotations:
+        # Roll the pod when the config changes. Loki reads its config once at start, and
+        # nothing here is reconciled by ArgoCD, so without this a `kubectl apply` of the
+        # ConfigMap is a change that appears to have landed and has not.
+        checksum/config: "loki-config-v1-retention-720h"
     spec:
+      # The image runs as uid 10001 and the longhorn volume comes up owned by root, so
+      # without fsGroup loki cannot create /loki/wal and crash-loops on
+      # "mkdir /loki/wal: permission denied".
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        fsGroup: 10001
       containers:
       - name: loki
         image: grafana/loki:3.7.3
         imagePullPolicy: IfNotPresent
         args:
-          - -config.file=/etc/loki/local-config.yaml
+          - -config.file=/etc/loki/loki.yaml
         ports:
-        - containerPort: 3100
+        - name: http
+          containerPort: 3100
+        - name: grpc
+          containerPort: 9096
+        # Measured, not guessed: RSS sits around 200Mi with ~20 MB/day of ingest and the
+        # embedded 100Mi query cache. The limit is deliberately well above that - loki's
+        # memory scales with the number of active streams, and promtail labels every pod in
+        # the cluster, so a burst of new pods is a burst of streams.
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        # /ready, not /metrics: loki serves HTTP before the ingester has joined its own ring
+        # and answers /ready with "Ingester not ready: waiting for 15s after being ready"
+        # until it can actually accept a push. A probe on anything else marks it Ready while
+        # promtail's pushes are still being refused.
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          # WAL replay after an unclean stop can take a while on the pi's SD card, and a
+          # liveness probe that kills loki mid-replay never lets it finish.
+          failureThreshold: 6
+        volumeMounts:
+        - name: config
+          mountPath: /etc/loki
+        - name: data
+          mountPath: /loki
+      volumes:
+      - name: config
+        configMap:
+          name: loki-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: loki-data
 ---
 apiVersion: v1
 kind: Service
@@ -32,5 +100,6 @@ spec:
   selector:
     app: loki
   ports:
-  - port: 3100
-    targetPort: 3100
+  - name: http
+    port: 3100
+    targetPort: http
