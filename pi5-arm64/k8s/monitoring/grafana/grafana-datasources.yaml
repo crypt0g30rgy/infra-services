@@ -1,0 +1,47 @@
+# Datasources as code, mounted at /etc/grafana/provisioning/datasources.
+#
+# Grafana reads this directory at every start and reconciles the datasources in its
+# database to match, so these three are always present and always correct - which they
+# were not when they had to be added through the UI into a database that did not survive
+# the pod.
+#
+# The `uid` values are fixed on purpose: the dashboards in this directory reference their
+# datasource by uid, and a uid Grafana generates for itself would differ between this
+# cluster and any other, leaving every panel pointing at nothing.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        jsonData:
+          # Matches prometheus.yml's global scrape_interval, so Grafana's $__rate_interval
+          # never resolves shorter than the time between two samples.
+          timeInterval: 15s
+          httpMethod: POST
+
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        jsonData:
+          # promtail labels every stream with the namespace, pod, container and node it
+          # came from - see promtail-configmap.yaml - so this is the label to break logs
+          # down by first.
+          maxLines: 1000
+
+      - name: Jaeger
+        uid: jaeger
+        type: jaeger
+        access: proxy
+        url: http://jaeger:16686

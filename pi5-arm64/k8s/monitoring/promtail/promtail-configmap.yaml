@@ -22,21 +22,36 @@ data:
       kubernetes_sd_configs:
       - role: pod
 
+      # `cri`, not `docker`. microk8s runs containerd, so a line on disk looks like
+      # `2026-08-26T18:11:00.30Z stdout F [Nest] ... `, not the docker runtime's
+      # `{"log":"...","stream":"stdout","time":"..."}`. The docker stage could not parse
+      # any of it, so every line reached Loki with the timestamp/stream/partial-flag
+      # prefix still glued to the front of the message: unreadable in a log panel,
+      # undetectable by Loki's level detection (every stream came out
+      # `detected_level="unknown"`), and timestamped when promtail read the file rather
+      # than when the container wrote it.
+      #
+      # The `json` stage that used to follow is gone with it: those expressions are
+      # nginx/ingress field names, nothing here emits them at the top level of a log
+      # line, and without a `labels` stage nothing was promoted anywhere regardless - it
+      # was a failed JSON parse per line, for every container in the cluster.
       pipeline_stages:
-      - docker: {}
-      - json:
-          expressions:
-            time: time
-            host: host
-            method: method
-            uri: uri
-            status: status
-            request_time: request_time
-            namespace: namespace
-            ingress_name: ingress_name
-            service_name: service_name
-            cf_country: cf_country
-            cf_connecting_ip: cf_connecting_ip
+      - cri: {}
+
+      # Strip ANSI colour codes. Nest's logger colourises its output whether or not it is
+      # writing to a terminal, so every line stored in Loki carried `\x1b[32m` style
+      # escapes around the level and the context. Grafana's log panel renders them as
+      # literal `[32m`, they defeat Loki's level detection (every stream came out
+      # `detected_level="unknown"`), and any line filter written against the visible text
+      # has to guess where the escapes fall. Cheaper to remove them here, once, than to
+      # change the logger in thirteen services.
+      #
+      # The whole pattern is a capture group on purpose: promtail's replace stage
+      # substitutes captured groups, so an expression with none matches and changes
+      # nothing.
+      - replace:
+          expression: '(\x1b\[[0-9;]*m)'
+          replace: ''
 
       relabel_configs:
 

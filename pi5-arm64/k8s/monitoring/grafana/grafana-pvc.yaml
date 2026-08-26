@@ -1,0 +1,24 @@
+# Grafana's state: the SQLite database at /var/lib/grafana/grafana.db.
+#
+# Everything Grafana knows that is not provisioned from a file lives in there - the admin
+# password, users and their API tokens, dashboards built in the UI, annotations, starred
+# dashboards, alert rules and their silences. Without a claim it was an empty container
+# filesystem, so every restart of the pod - a node reboot, an image pull, an edit to the
+# Deployment - handed back a factory-fresh Grafana asking to set a password again. That is
+# also why the datasource had to be added by hand from the UI more than once
+# (prometheus-data-source-setup.md); it is provisioned from a ConfigMap now.
+#
+# `longhorn` is the default class and Retain, in step with every other claim on this
+# cluster, so deleting the PVC does not immediately destroy the volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
