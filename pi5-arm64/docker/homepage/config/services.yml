@@ -12,7 +12,7 @@
         href: https://github.com/crypt0g30rgy
         description: My Github
 
-- BLOG & WEBSITE:
+- BLOG-WEBSITE:
     - root:
         icon: mdi-nodejs
         href: https://xboy.me
@@ -22,42 +22,46 @@
         href: https://blog.xboy.me
         description: My personal blog
 
-- SELF-HOSTED SERVICES:
+- SELF-HOSTED-SERVICES:
     - homepage:
         icon: mdi-home
-        href: https://home.pi-zone.internal.local-dev.xboy.me
+        href: https://home.internal.xboy.me
         description: My Homelab homepage
     - grafana:
         icon: mdi-chart-line
-        href: https://grafana.pi-zone.internal.local-dev.xboy.me
+        href: https://grafana.internal.xboy.me
         description: Grafana dashboards
+    - bugsink:
+        icon: mdi-bug
+        href: https://bugsink.internal.xboy.me
+        description: Bugsink error tracking (Sentry-compatible)
     - gitea:
         icon: mdi-source-repository
-        href: https://gitea.pi-zone.internal.local-dev.xboy.me
+        href: https://gitea.internal.xboy.me
         description: Gitea git server
     - jenkins:
         icon: mdi-jenkins
-        href: https://jenkins.pi-zone.internal.local-dev.xboy.me
+        href: https://jenkins.internal.xboy.me
         description: Jenkins CI/CD server
     - pihole:
         icon: mdi-pihole
-        href: https://pihole.pi-zone.internal.local-dev.xboy.me/admin
+        href: https://pihole.internal.xboy.me/dashboard
         description: Pi-hole ad blocker and DNS server
     - portainer:
         icon: mdi-portainer
-        href: https://portainer.pi-zone.internal.local-dev.xboy.me
+        href: https://portainer.internal.xboy.me
         description: Portainer container management UI
     - traefik:
         icon: mdi-traefik
-        href: https://traefik.pi-zone.internal.local-dev.xboy.me/dashboard/
+        href: https://traefik.internal.xboy.me/dashboard/
         description: Traefik reverse proxy and dashboard
     - vaultwarden:
         icon: mdi-vault
-        href: https://vault.pi-zone.internal.local-dev.xboy.me
+        href: https://vault.internal.xboy.me
         description: Vaultwarden password manager
-            
+
 - CONTACT:
     - email:
         icon: mdi-email
-        href: mailto:example@example.com
+        href: mailto:admin@mail.internal.xboy.me
         description: Contact me via email
