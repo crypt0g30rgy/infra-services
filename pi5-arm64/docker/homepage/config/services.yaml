@@ -12,13 +12,19 @@
         href: https://github.com/crypt0g30rgy
         description: My Github
 
+- ORG-WEBSITE:
+    - root:
+        icon: mdi-blog
+        href: https://example.org
+        description: Org Home
+
 - BLOG-WEBSITE:
     - root:
         icon: mdi-nodejs
         href: https://example.com
-        description: My cool website
+        description: Redirector website
     - blog:
-        icon: mdi-rss
+        icon: mdi-post
         href: https://blog.example.com
         description: My personal blog
 
