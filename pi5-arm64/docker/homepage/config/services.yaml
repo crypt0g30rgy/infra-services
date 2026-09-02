@@ -12,7 +12,7 @@
         href: https://github.com/crypt0g30rgy
         description: My Github
 
-- BLOG & WEBSITE:
+- BLOG-WEBSITE:
     - root:
         icon: mdi-nodejs
         href: https://example.com
@@ -22,42 +22,46 @@
         href: https://blog.example.com
         description: My personal blog
 
-- SELF-HOSTED SERVICES:
+- SELF-HOSTED-SERVICES:
     - homepage:
         icon: mdi-home
-        href: https://home.pi-zone.internal.local-dev.example.com
+        href: https://home.internal.example.com
         description: My Homelab homepage
     - grafana:
         icon: mdi-chart-line
-        href: https://grafana.pi-zone.internal.local-dev.example.com
+        href: https://grafana.internal.example.com
         description: Grafana dashboards
+    - bugsink:
+        icon: mdi-bug
+        href: https://bugsink.internal.example.com
+        description: Bugsink error tracking (Sentry-compatible)
     - gitea:
         icon: mdi-source-repository
-        href: https://gitea.pi-zone.internal.local-dev.example.com
+        href: https://gitea.internal.example.com
         description: Gitea git server
     - jenkins:
         icon: mdi-jenkins
-        href: https://jenkins.pi-zone.internal.local-dev.example.com
+        href: https://jenkins.internal.example.com
         description: Jenkins CI/CD server
     - pihole:
         icon: mdi-pihole
-        href: https://pihole.pi-zone.internal.local-dev.example.com/admin
+        href: https://pihole.internal.example.com/dashboard
         description: Pi-hole ad blocker and DNS server
     - portainer:
         icon: mdi-portainer
-        href: https://portainer.pi-zone.internal.local-dev.example.com
+        href: https://portainer.internal.example.com
         description: Portainer container management UI
     - traefik:
         icon: mdi-traefik
-        href: https://traefik.pi-zone.internal.local-dev.example.com/dashboard/
+        href: https://traefik.internal.example.com/dashboard/
         description: Traefik reverse proxy and dashboard
     - vaultwarden:
         icon: mdi-vault
-        href: https://vault.pi-zone.internal.local-dev.example.com
+        href: https://vault.internal.example.com
         description: Vaultwarden password manager
 
 - CONTACT:
     - email:
         icon: mdi-email
-        href: mailto:example@example.com
+        href: mailto:admin@mail.internal.example.com
         description: Contact me via email

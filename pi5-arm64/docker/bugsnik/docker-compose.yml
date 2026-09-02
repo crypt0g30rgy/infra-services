@@ -1,0 +1,138 @@
+# Bugsink: self-hosted, Sentry-SDK compatible error tracking, behind traefik.
+#
+# Storage is SQLite on the ./data bind mount - bugsink's own default and its
+# documented production choice for a single server. Postgres is left ready but
+# unused: the commented `db` service at the bottom plus DATABASE_URL in .env.
+#
+# One container runs both processes (gunicorn and the snappea background
+# worker, under monofy); there is nothing else to start.
+networks:
+  internal:
+    external: true
+
+services:
+  bugsink:
+    image: bugsink/bugsink:2.5.1
+    container_name: bugsink
+    restart: unless-stopped
+    networks:
+      - internal
+
+    # Every setting comes from .env. The two below are derived from the host
+    # names in it, so a host name is written down exactly once.
+    env_file:
+      - .env
+
+    environment:
+      # Builds DSNs and the links in alert emails. No trailing slash.
+      BASE_URL: "https://${BUGSINK_INTERNAL_HOST}"
+      # Django answers 400 to any Host not in here, and without it the only
+      # accepted Host is the one deduced from BASE_URL. Both routers below,
+      # plus loopback for the healthcheck and for curl on the host.
+      ALLOWED_HOSTS: "${BUGSINK_INTERNAL_HOST},${BUGSINK_EXTERNAL_HOST},127.0.0.1,localhost"
+
+    ports:
+      # Direct LAN access, bypassing traefik. Also how you reach it while DNS
+      # or the certificate is still being sorted out.
+      - "${BUGSINK_HOST_PORT}:${PORT}"
+
+    volumes:
+      # db.sqlite3 lives here. The image runs as uid/gid 14237, and docker
+      # creates a missing bind-mount source as root, so this must exist and be
+      # owned by 14237 BEFORE the first `up` or migrations die read-only:
+      #   mkdir -p data && sudo chown -R 14237:14237 data
+      - ./data:/data
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      # The image ships this same probe, hard-coded to :8000; repeated here so
+      # it follows ${PORT}. /health/ready needs no authentication.
+      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://127.0.0.1:${PORT}/health/ready\").raise_for_status()'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # First boot runs `check --deploy` and every migration before it listens.
+      start_period: 60s
+
+    labels:
+      - "traefik.enable=true"
+
+      # --------------------------
+      # Internal Router
+      # --------------------------
+      - "traefik.http.routers.bugsink-internal.rule=Host(`${BUGSINK_INTERNAL_HOST}`)"
+      - "traefik.http.routers.bugsink-internal.entrypoints=websecure"
+      - "traefik.http.routers.bugsink-internal.tls=true"
+      - "traefik.http.routers.bugsink-internal.tls.certresolver=myresolver"
+
+      # --------------------------
+      # External Router
+      # --------------------------
+      - "traefik.http.routers.bugsink-external.rule=Host(`${BUGSINK_EXTERNAL_HOST}`)"
+      - "traefik.http.routers.bugsink-external.entrypoints=websecure"
+      # - "traefik.http.routers.bugsink-external.tls.certresolver=myresolver" # disabled since cf tunnel currently handles that
+
+      # --------------------------
+      # No auth middleware, on purpose
+      # --------------------------
+      # SDKs POST crash reports to /api/<project>/envelope/ carrying only the
+      # DSN key, so a basicauth middleware in front of this router silently
+      # drops every event. The UI has its own login; ingestion is authenticated
+      # by the DSN.
+
+      # --------------------------
+      # Shared Service
+      # --------------------------
+      - "traefik.http.services.bugsink-internal.loadbalancer.server.port=${PORT}"
+
+    deploy:
+      resources:
+        limits:
+          # gunicorn + snappea, both Python. Ingestion is the memory-hungry
+          # part (MAX_ENVELOPE_SIZE defaults to 100 MiB, decompressed in
+          # memory), so leave headroom above the idle ~200M.
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+# --------------------------
+# Postgres, for later
+# --------------------------
+# SQLite is the supported production default and is what ./data holds today.
+# To move to Postgres: uncomment this service and the volume, uncomment
+# DATABASE_URL in .env, and remember it starts EMPTY - there is no automatic
+# import of db.sqlite3 (see https://www.bugsink.com/docs/postgresql/).
+#
+#   db:
+#     image: postgres:17-alpine
+#     container_name: bugsink-db
+#     restart: unless-stopped
+#     networks:
+#       - internal
+#     environment:
+#       POSTGRES_USER: bugsink
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: bugsink
+#     volumes:
+#       - ./pgdata:/var/lib/postgresql/data
+#     healthcheck:
+#       test: pg_isready -h localhost -U bugsink
+#       interval: 5s
+#       timeout: 5s
+#       retries: 5
+#       start_period: 10s
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: "0.5"
+#           memory: 512M
+#
+# and on the bugsink service:
+#
+#     depends_on:
+#       db:
+#         condition: service_healthy
