@@ -6,7 +6,7 @@ version: '2'
 
 services:
   drone-server:
-    image: drone/drone:2.26
+    image: drone/drone:2.28
     container_name: drone-server
     restart: always
     volumes:
