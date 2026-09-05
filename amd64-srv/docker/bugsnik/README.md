@@ -1,133 +1,51 @@
-# Bugsink — error tracking (Sentry-SDK compatible)
+# Bugsink — the amd64 instance
 
-`bugsink/bugsink:2.5.1` behind traefik, SQLite on the `./data` bind mount, one
-container running both gunicorn and the snappea background worker.
+One instance per node. This is the amd64 one; the arm64 one is
+[`../../../arm64-srv/docker/bugsnik/`](../../../arm64-srv/docker/bugsnik/README.md),
+and that README covers everything shared: what bugsink is, how it relates to the
+otel/Jaeger path, `.env` keys, email, the SQLite-vs-Postgres decision, and the
+gotchas. Only the per-node differences are here.
 
-It speaks the **Sentry** ingest protocol, so any Sentry SDK reports to it with
-nothing but a DSN change. It is **not** an OTLP endpoint — see
-[Where it sits next to otel](#where-it-sits-next-to-otel).
-
-## Bring-up
-
-```bash
-mkdir -p data && sudo chown -R 14237:14237 data   # not optional, see below
-$EDITOR .env                                      # SECRET_KEY at least
-docker compose up -d
-docker compose exec bugsink bugsink-manage createsuperuser
-```
-
-Then `https://bugsink.internal.example.com` (or `http://<pi>:8000` before DNS and
-the certificate exist).
-
-`chown 14237` first, because the image runs as uid/gid 14237 and docker creates
-a missing bind-mount source owned by root. Skip it and the container loops on
-`attempt to write a readonly database` during migrate, which reads like a
-corrupt database rather than a permission problem.
-
-`SECRET_KEY` is blank in the committed `.env` — this repo is public. Generate one
-with `openssl rand -base64 50`. Bugsink runs `bugsink-manage check --deploy
---fail-level WARNING` before it serves anything, so a missing or weak key stops
-the boot with the reason on stdout instead of shipping a known key.
-
-## Routing
-
-| host | route | TLS |
+| | arm64 instance | this one |
 |---|---|---|
-| `${BUGSINK_INTERNAL_HOST}` | `bugsink-internal`, LAN | traefik, `myresolver` (DNS-01) |
-| `${BUGSINK_EXTERNAL_HOST}` | `bugsink-external`, cf tunnel | cloudflare, so no certresolver on this router |
-| `<pi>:8000` | published port | none |
+| Reached via | traefik on 443, two hostnames, cf tunnel for the external one | directly on `:8000` |
+| Network | external docker network `internal`, shared with traefik | the project's own bridge |
+| `BEHIND_HTTPS_PROXY` | `true` — required behind traefik | `false` — nothing terminates TLS here |
+| Host port | 8001 (traefik owns 443) | 8000 |
+| Memory limit | 768M | 512M — this node reserves 6Gi for non-Kubernetes work |
+| Deployed from | `~/bugsnik/` on that host | this directory |
 
-Both names must be in `ALLOWED_HOSTS` or Django answers **400** to that host and
-nothing else explains why; `docker-compose.yml` builds the list from the two
-`.env` values so they are written down once. The external hostname also needs an
-ingress rule in the Cloudflare dashboard — this tunnel is token-run, so its
-routes are not in a file here.
+The compose files are separate rather than shared because the arm64 one declares
+`networks: internal: external: true`, and no network named `internal` exists on
+this host — applying it here fails outright.
 
-**No basicauth middleware on either router**, deliberately. SDKs POST to
-`/api/<project>/envelope/` with only the DSN key, and a middleware in front of
-that swallows every event while the UI keeps working. Ingestion is authenticated
-by the DSN; the UI has its own login.
+## Two things to fix on this node
 
-## Sending events to it
+**1. The running container has no bind mount.** As of 2026-09-05 its
+`/data/db.sqlite3` (684K) is in the container's writable layer, so
+`docker compose down` or a forced recreate loses every recorded issue. The
+compose file here adds `./data:/data`, which means the next `up` *will* replace
+the container. Rescue the database first — the exact sequence is in the header of
+`docker-compose.yml`.
 
-Create a project in the UI, copy its DSN, and give it to the service:
+**2. `.env` is a copy of the arm64 node's.** It carries the same
+`BUGSINK_INTERNAL_HOST`, the same `SECRET_KEY`, and `SITE_TITLE=Bugsink (pi5)`,
+which is why this instance is easy to mistake for the other one in a browser tab.
+Before the next `up`:
 
-```
-SENTRY_DSN=https://<key>@bugsink.internal.example.com/<project-id>
-```
+- set `BUGSINK_NODE_HOST` to this node's name or address (the compose file falls
+  back to `192.168.0.60`, its current LAN address, if unset)
+- give it its own `SITE_TITLE`, e.g. `Bugsink (amd64)`
+- generate a separate `SECRET_KEY` with `openssl rand -base64 50` — two servers
+  sharing one signing key means a session cookie from either is valid on both
 
-The internal hostname only resolves on the LAN, so anything running off-network
-(a phone build, a cloud runner) needs the external one instead.
+`.env` is gitignored, so none of this is in the repo; it has to be done on the
+host.
 
-### Where it sits next to otel
+## Why two instances at all
 
-Bugsink ingests Sentry envelopes over HTTP. It does not accept OTLP, and it is
-not a replacement for the otel collector → Jaeger path that the platform's
-traces already take — traces stay there, crashes come here.
-
-The two line up rather than compete: a Sentry SDK running alongside otel
-instrumentation attaches the active `trace_id` to the event it sends, so an
-issue in Bugsink names the trace you then open in Jaeger. Keeping both means the
-tracing side never has to become an alerting product.
-
-## Email
-
-Alerts and password resets are SMTP. `EMAIL_HOST` blank (as committed) means
-bugsink writes mail to the container log rather than sending it — alerts still
-appear in the UI, so this is a usable state, not a broken one. Fill in the
-`EMAIL_*` block for real delivery; `EMAIL_BACKEND` needs no setting, bugsink
-switches to SMTP as soon as `EMAIL_HOST` is non-empty. `EMAIL_LOGGING=true`
-prints every subject and recipient, which is how you find out whether alerts
-fire at all. Full list: <https://www.bugsink.com/docs/settings/#email>.
-
-Leave `USER_REGISTRATION_VERIFY_EMAIL=false` until mail actually sends,
-otherwise an invited user is stuck behind a verification link that was only ever
-logged.
-
-## Database
-
-SQLite, at `./data/db.sqlite3`. That is bugsink's own production default, not a
-downgrade: one writer, no server, and the whole database is one file.
-
-Postgres is staged but not running — the commented `db` service in
-`docker-compose.yml` plus `DATABASE_URL` in `.env`. Switching is not a
-migration: the new database starts empty and old events do not follow
-(<https://www.bugsink.com/docs/postgresql/>).
-
-Backups: copy the file with `sqlite3 data/db.sqlite3 ".backup /tmp/bugsink.db"`,
-not `cp` — a plain copy of a live SQLite file can land mid-write. Retention is
-per project in the UI (an event budget per project), so the file does not grow
-without bound; `FILE_EVENT_STORAGE_PATH` in `.env` moves the bulky part out to
-flat files if it does.
-
-## Operating
-
-```bash
-docker compose logs -f bugsink          # gunicorn access log + snappea
-docker compose exec bugsink bugsink-manage <cmd>
-docker compose ps                       # healthcheck is GET /health/ready
-```
-
-Upgrades are a tag bump plus `docker compose up -d`; migrations run in the
-container's own start command, so there is no separate step. Read the release
-notes first — `scripts/check-image-updates.py` reports when this tag is behind,
-and it never bumps it for you.
-
-## Gotchas
-
-- **Client IPs from the external route are the tunnel's, not the caller's.**
-  `BEHIND_HTTPS_PROXY=true` makes bugsink read `X-Real-Ip`, which traefik sets
-  (and strips from callers, correctly). But for tunnel traffic the caller
-  traefik sees *is* cloudflared, so every external event carries cloudflared's
-  container IP. LAN traffic is accurate. Switching to `X-Forwarded-For` does not
-  fix it either: it needs one fixed `X_FORWARDED_FOR_PROXY_COUNT` and the two
-  routes have different hop counts.
-- **`BEHIND_HTTPS_PROXY` is not optional behind traefik.** Without it Django
-  sees plain HTTP, and every login POST fails CSRF with `(wrong scheme)`.
-- **Inline comments in `.env` are part of the value.** compose's env-file parser
-  is not a shell; keep comments on their own lines.
-- **Numeric settings must not be blank.** An empty `SNAPPEA_NUM_WORKERS` or
-  `EMAIL_PORT` reaches `int("")` and kills the boot. Blank is only safe for the
-  string settings that are explicitly optional here.
-- **`CREATE_SUPERUSER` only fires when the instance has zero users**, so it is
-  no use for a forgotten password. `bugsink-manage changepassword <email>` is.
+They are independent: separate SQLite databases, separate projects, separate
+DSNs. A crash reported to one is not visible in the other, so pick per service
+which node's DSN it uses and keep it consistent — usually the node the service
+runs on, so an error report does not depend on the link between the two machines
+being up.

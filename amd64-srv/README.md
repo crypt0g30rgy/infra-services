@@ -23,16 +23,14 @@ Verified 2026-09-05 against `docker ps` on the host and `kubectl get all -A`.
 
 | Path | State |
 |---|---|
-| `docker/bugsnik` | running — error tracking (`bugsink`), started from this path, so the compose project's config path moves when this directory does |
+| `docker/bugsnik` | running — error tracking (`bugsink`), one instance per node; this is the amd64 one, the arm64 one is `../arm64-srv/docker/bugsnik`. **Its database is in the container layer — read the README before the next `up`.** |
 | `docker/ollama` | not deployed — written for the previous amd64 box and its GTX 1050 Ti |
 | `k8s/ollama` | not deployed — there is no `ai` namespace in the cluster |
 
 Most of what runs on this host is *not* in this repo: the
 `meet-to-meat-services` dependency stacks (postgres, lavinmq, valkey, otel,
 jaeger, prometheus) come from their own repo, and the cluster's share of pods is
-scheduled here by Kubernetes. A second `bugsink` instance runs on the arm64 host
-from `~/bugsnik/`; confirm that is intentional before treating either as
-authoritative.
+scheduled here by Kubernetes.
 
 ## Node protection
 

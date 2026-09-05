@@ -28,6 +28,7 @@ Anything marked *not deployed* also carries a header comment in its own files.
 | Stack | State |
 |---|---|
 | `docker/adguard` | running — DNS for the whole LAN, so treat its ports carefully |
+| `docker/bugsnik` | running — error tracking, from `~/bugsnik/`; one instance per node, the amd64 one is `../amd64-srv/docker/bugsnik` |
 | `docker/cloudflared` | running — host-level tunnel (there is a second, separate tunnel in `k8s/ingress/cloudflared`) |
 | `docker/local-registry` | running — `registry.internal.example.com`, plus its UI and the digest cleaner |
 | `docker/portainer` | running |
@@ -46,9 +47,8 @@ Anything marked *not deployed* also carries a header comment in its own files.
 | `docker/vault-warden` | not deployed — runs in `k8s/vault-warden` |
 
 Some containers on this host have no directory here at all: `minio-s3`,
-`open-webui`, `scopanator`, `verdaccio`, `discord-autodelete-bot`, a buildx
-builder, and a second `bugsink` instance from `~/bugsnik/`. They are deployed
-from elsewhere or by hand.
+`open-webui`, `scopanator`, `verdaccio`, `discord-autodelete-bot` and a buildx
+builder. They are deployed from elsewhere or by hand.
 
 ### Kubernetes
 
