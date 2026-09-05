@@ -25,16 +25,40 @@ spec:
       # pre-migration pg_dumpall. Indexes were rebuilt with REINDEX DATABASE
       # afterwards anyway, which is the one thing a collation difference would
       # have corrupted. If this node ever moves arch again, dump and restore.
+      #
+      # That caveat is now moot for the current data: the 15 -> 18 upgrade below
+      # was a dump and restore, so the on-disk cluster was written from scratch
+      # by an x86_64 PostgreSQL 18 running on this node.
       nodeSelector:
         kubernetes.io/hostname: dell-amd64-srv
 
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          # PostgreSQL 18. This was not a tag bump: 18 refuses to start on a
+          # data directory written by 15, so the database was dumped with
+          # pg_dumpall, the volume was emptied and the dump restored. Bumping
+          # the major here again without doing that leaves the pod in
+          # CrashLoopBackOff on "database files are incompatible with server".
+          image: postgres:18-alpine
           ports:
             - containerPort: 5432
               name: postgres
           env:
+            # Explicit, and a *subdirectory* of the mount, for two reasons.
+            #
+            # postgres:18 changed the image's own default PGDATA to
+            # /var/lib/postgresql/18/docker and declares /var/lib/postgresql as
+            # the volume. Leave it unset and the cluster is initialised in the
+            # container's writable layer, outside the PVC mounted below, and is
+            # gone on the next pod restart - silently, because it starts fine.
+            #
+            # It also cannot be the mount root: this is a Longhorn ext4 volume,
+            # so /var/lib/postgresql/data contains lost+found and initdb refuses
+            # a non-empty directory. Up to 15 the data sat at the root because
+            # the volume used to be microk8s-hostpath, which has no lost+found.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:

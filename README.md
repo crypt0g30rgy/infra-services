@@ -36,3 +36,8 @@ Helm release, an ArgoCD Application with `selfHeal`) that decides how it may be
 changed and what will be reverted. See
 [`maintenance/2026-09-05-cluster-component-upgrades.md`](./maintenance/2026-09-05-cluster-component-upgrades.md),
 which records the last round and the traps in each path.
+
+A database major is not a tag edit either — PostgreSQL will not start on a data
+directory written by an older major. The dump-and-restore procedure used for all
+three servers, and everything that went wrong doing it, is in
+[`maintenance/2026-09-05-postgres-15-to-18.md`](./maintenance/2026-09-05-postgres-15-to-18.md).

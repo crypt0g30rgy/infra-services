@@ -21,7 +21,7 @@ spec:
       #    pi reaches the identical data over iSCSI across the LAN.
       # 2. The pi had ~3670m of its 4000m CPU requested; dell was at ~15%.
       #
-      # vaultwarden/server and postgres:15-alpine are both multi-arch.
+      # vaultwarden/server and postgres:18-alpine are both multi-arch.
       nodeSelector:
         kubernetes.io/hostname: dell-amd64-srv
 
