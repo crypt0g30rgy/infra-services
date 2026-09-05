@@ -10,6 +10,7 @@ infra services is a repo that hosts services running in my homelab/production se
 arm64-srv/     the arm64 node: control plane, most compose stacks, cluster manifests
 amd64-srv/     the amd64 node: worker, host-specific compose stacks
 incidents/     what broke, why, and what was changed because of it
+maintenance/   planned changes: what was upgraded, what it diverged from, how to revert
 scripts/       repo tooling
 Infra.md       both nodes' specs, roles and current headroom
 k8s.md         MicroK8s setup notes
@@ -28,3 +29,10 @@ so a stale manifest cannot be mistaken for a live one.
 images are behind upstream, either from the tags declared here or from what is
 actually running in the cluster. A scheduled workflow runs it weekly and keeps the
 answer in one issue; it never bumps a tag by itself.
+
+In-cluster components — MetalLB, ArgoCD, Longhorn, KEDA — are not upgraded by
+editing a tag: each is owned by something (a MicroK8s addon, plain manifests, a
+Helm release, an ArgoCD Application with `selfHeal`) that decides how it may be
+changed and what will be reverted. See
+[`maintenance/2026-09-05-cluster-component-upgrades.md`](./maintenance/2026-09-05-cluster-component-upgrades.md),
+which records the last round and the traps in each path.
