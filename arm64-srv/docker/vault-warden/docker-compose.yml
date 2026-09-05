@@ -1,0 +1,15 @@
+# NOT DEPLOYED as of 2026-09-05: Vaultwarden runs in Kubernetes now - see
+# ../../k8s/vault-warden/ (deployment `vaultwarden/vaultwarden` plus its
+# postgres StatefulSet and the nightly `vaultwarden-backup` CronJob).
+#
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      DOMAIN: "https://vw.example.com"
+    volumes:
+      - ./vw-data/:/data/
+    ports:
+      - 8090:80

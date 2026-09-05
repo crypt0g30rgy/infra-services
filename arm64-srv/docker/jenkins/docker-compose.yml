@@ -1,0 +1,65 @@
+# NOT DEPLOYED as of 2026-09-05: Jenkins runs in Kubernetes now - see
+# ../../k8s/jenkins/ (deployment `jenkins/jenkins`). No compose file for it
+# exists on either host. Two ways to run one CI server is one too many.
+#
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+
+    # Run as non-root if desired
+    user: "1000:1000"
+
+    ports:
+      - "8079:8080"
+      - "50000:50000"
+
+    environment:
+      JAVA_OPTS: >
+        -Djenkins.install.runSetupWizard=true
+        -Djenkins.model.Jenkins.crumbIssuerProxyCompatibility=true
+
+      # Used by Jenkins plugins/build metadata
+      JENKINS_URL: "https://${JENKINS_INTERNAL_HOST}"
+
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - ./logs:/var/log/jenkins
+
+    networks:
+      - ci-cd
+
+    labels:
+      - "traefik.enable=true"
+
+      #
+      # Router
+      #
+      - "traefik.http.routers.jenkins.rule=Host(`${JENKINS_INTERNAL_HOST}`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=myresolver"
+
+      #
+      # Service
+      #
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+
+      #
+      # Forward headers correctly to Jenkins
+      #
+      - "traefik.http.middlewares.jenkins-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.jenkins-headers.headers.customrequestheaders.X-Forwarded-Port=443"
+
+      #
+      # Apply middleware
+      #
+      - "traefik.http.routers.jenkins.middlewares=jenkins-headers"
+
+volumes:
+  jenkins_data:
+
+networks:
+  ci-cd:
+    external: true

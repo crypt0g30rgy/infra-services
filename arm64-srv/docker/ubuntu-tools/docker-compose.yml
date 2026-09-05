@@ -1,0 +1,24 @@
+# NOT DEPLOYED as of 2026-09-05: the compose project is down on the arm64 host
+# (~/ubuntu-tools/docker-compose.yml exists, `docker compose ls` does not list it).
+# Kept for reference; delete once you are sure it is not coming back.
+#
+version: "3.8"
+
+networks:
+  internal:
+    external: true   # use the same network your Drone stack is already on
+  proxy:
+    external: true
+
+services:
+  ubuntu-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ubuntu-tools
+    networks:
+      - internal
+      - proxy
+    tty: true
+    stdin_open: true
+    command: sleep infinity

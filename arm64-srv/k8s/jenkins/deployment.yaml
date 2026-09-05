@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      serviceAccountName: jenkins
+
+      # Runs on the amd64 box, not the pi. It used to have no choice: jenkins-home
+      # was a hostpath directory on the pi. Now that the volume is on Longhorn and
+      # reachable over iSCSI from either node, Jenkins belongs on the machine with
+      # the spare capacity - the pi had ~3670m of its 4000m CPU already requested,
+      # and Jenkins alone asks for 500m of it.
+      #
+      # Pinned rather than left to the scheduler, because "wherever it lands" is
+      # not a deployment target. jenkins/jenkins:2.578 is a multi-arch image, so
+      # amd64 is fine.
+      nodeSelector:
+        kubernetes.io/hostname: dell-amd64-srv
+
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:2.580
+
+        ports:
+        - containerPort: 8080
+        # - containerPort: 50000
+
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+
+        volumeMounts:
+        - name: jenkins-home
+          mountPath: /var/jenkins_home
+
+      volumes:
+      - name: jenkins-home
+        persistentVolumeClaim:
+          claimName: jenkins-home
