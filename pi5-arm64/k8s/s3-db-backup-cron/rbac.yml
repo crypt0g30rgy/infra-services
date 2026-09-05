@@ -1,3 +1,12 @@
+# SUPERSEDED - nothing uses this. It existed only so backup-cron.yml could
+# `kubectl exec` into the postgres pod; that Job now connects to the Service
+# instead, and it was never deployed in the first place. Delete alongside
+# backup-cron.yml.
+#
+# Note also that the Role below does not grant what it looks like it grants:
+# `exec` is a subresource, so the verb has to be `create` on `pods/exec`. As
+# written, the ServiceAccount could list pods and nothing else - and the API
+# server accepts the rule without complaint.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
