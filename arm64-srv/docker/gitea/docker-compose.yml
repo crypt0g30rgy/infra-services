@@ -34,7 +34,7 @@ services:
 
   # ---------- Gitea ----------
   gitea:
-    image: gitea/gitea:1.25
+    image: gitea/gitea:1.27
     container_name: gitea
     restart: unless-stopped
     environment:
@@ -65,7 +65,7 @@ services:
 
   # ---------- Gitea Runner ----------
   gitea-runner:
-    image: gitea/act_runner:0.2.13
+    image: gitea/act_runner:0.6.1
     container_name: gitea-runner
     restart: unless-stopped
     environment:

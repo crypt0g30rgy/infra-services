@@ -54,7 +54,7 @@ spec:
               mountPath: /data
       containers:
         - name: traefik
-          image: traefik:v3.7.11
+          image: traefik:v3.7.13
           args:
             - --configfile=/etc/traefik/traefik.yaml
           # No env. There used to be a CF_DNS_API_TOKEN here, read from a
