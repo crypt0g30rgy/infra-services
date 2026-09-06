@@ -1,13 +1,9 @@
-# Datasources as code, mounted at /etc/grafana/provisioning/datasources.
+# Datasources as code, mounted at /etc/grafana/provisioning/datasources. Grafana reconciles
+# its database against this directory at every start, so these three are always present -
+# unlike when they were added through a UI whose database did not survive the pod.
 #
-# Grafana reads this directory at every start and reconciles the datasources in its
-# database to match, so these three are always present and always correct - which they
-# were not when they had to be added through the UI into a database that did not survive
-# the pod.
-#
-# The `uid` values are fixed on purpose: the dashboards in this directory reference their
-# datasource by uid, and a uid Grafana generates for itself would differ between this
-# cluster and any other, leaving every panel pointing at nothing.
+# The uids are fixed because the dashboards here reference their datasource by uid; a
+# Grafana-generated uid would differ per cluster and leave every panel pointing at nothing.
 apiVersion: v1
 kind: ConfigMap
 metadata:

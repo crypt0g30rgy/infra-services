@@ -1,25 +1,14 @@
-# The per-service dashboard, file-provisioned into the "Platform" folder alongside
-# grafana-dashboard-cluster.yaml.
+# The per-service dashboard, file-provisioned into the "Platform" folder. Built on what the
+# services send through the otel collector: spanmetrics from their traces plus the Node
+# auto-instrumentation's HTTP, pg and runtime metrics.
 #
-# Built on what the services export through the otel collector: spanmetrics derived from
-# their traces, plus the Node auto-instrumentation's HTTP, pg and runtime metrics. The one
-# thing to know before editing a query here is that the same service is keyed by two
-# different label names:
-#
-#   * spanmetrics (`traces_span_metrics_*`, produced by the collector's spanmetrics
-#     connector) label it `service_name`.
-#   * everything from the instrumentation itself (`http_*`, `db_*`, `nodejs_*`, `v8js_*`)
-#     labels it `exported_job` - the prometheus exporter renames OTLP's `job` resource
-#     attribute so it cannot collide with prometheus's own `job` label, which on this
-#     endpoint is always `otel-collector`.
-#
-# The $service variable is written against both, and its "All" value is `.+` rather than
-# `.*` on purpose: an empty label matches `.*`, so `.*` would also select every series
-# that has no `exported_job` at all.
-#
-# Traces themselves are in Jaeger - there is a dashboard link at the top. The collector's
-# pipeline health (spans accepted, sent, dropped) is on the cluster dashboard, because a
-# blank panel here and a broken exporter look identical from this side.
+# The same service is keyed by two label names: `service_name` on traces_span_metrics_*,
+# and `exported_job` on http_*/db_*/nodejs_*/v8js_* (the prometheus exporter renames OTLP's
+# `job` to avoid colliding with prometheus's own, which is always `otel-collector` here).
+# $service matches both, with "All" as `.+` not `.*`, since `.*` also matches series that
+# have no `exported_job`. Traces are in Jaeger (link at the top) and collector pipeline
+# health is on the cluster dashboard, because a blank panel here and a broken exporter look
+# the same from this side.
 apiVersion: v1
 kind: ConfigMap
 metadata:

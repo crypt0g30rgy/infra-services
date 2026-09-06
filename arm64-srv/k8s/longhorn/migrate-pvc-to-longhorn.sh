@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
 #
-# Move one microk8s-hostpath PVC to Longhorn, keeping the claim's name so no
-# workload manifest has to change.
-#
-# The procedure, and the reasoning behind each step, is in ./README.md under
-# "Migrating a hostpath volume to Longhorn". This script is that procedure made
-# repeatable; it was written after doing the first several by hand.
+# Move one microk8s-hostpath PVC to Longhorn under the same claim name, so no workload
+# manifest changes. One volume at a time: it refuses to run while anything has the source
+# mounted, copies, verifies four digests, then rebinds. The hostpath PV is left Released as
+# the rollback - no source data is deleted. Reasoning per step is in ./README.md.
 #
 #   ./migrate-pvc-to-longhorn.sh -n xboy -c postgres-root-pvc -w deploy/postgres-root
-#
-# One volume at a time, deliberately. It refuses to run if anything still has
-# the source volume mounted, copies, verifies four digests, and only then
-# rebinds. It never deletes the source data: the hostpath PV is left Released,
-# which is the rollback.
 #
 set -euo pipefail
 
@@ -20,8 +13,8 @@ NS=""
 CLAIM=""
 WORKLOAD=""
 SRC_NODE="pi-5-16gb-srv-0"   # where every hostpath directory physically is
-# Needs GNU find (-printf) and GNU coreutils (chown --reference), so not busybox
-# or alpine - their find has no -printf and the verification silently degrades.
+# Needs GNU find (-printf) and coreutils (chown --reference); busybox/alpine silently
+# degrade the verification.
 HELPER_IMAGE="debian:stable-slim"
 KEEP_JOB=false
 
@@ -80,10 +73,9 @@ fi
 say "scaling $WORKLOAD to 0"
 kc scale "$WORKLOAD" --replicas=0
 
-# Checked by claim name rather than by the workload's label selector: a copy
-# taken while anything at all still writes verifies clean and restores corrupt,
-# and the workload being scaled to 0 is not the same as its pod being gone - nor
-# does it account for some other pod having mounted the same claim.
+# By claim name, not the workload's selector: scaled to 0 is not the same as the pod being
+# gone, and some other pod may hold the claim. A copy taken under any writer verifies clean
+# and restores corrupt.
 for _ in $(seq 1 60); do
   HOLDERS=$(kc get pods -o json | python3 -c '
 import json,sys
@@ -154,9 +146,8 @@ spec:
               chmod "\$(stat -c %a /src)" /dst
               sync
 
-              # Four independent digests. Any one of them alone misses something:
-              # contents miss ownership, metadata misses contents, and neither
-              # notices a symlink pointing somewhere new.
+              # Four digests because each alone misses something: contents miss
+              # ownership, metadata misses contents, neither sees a retargeted symlink.
               d() {
                 cd "\$1"
                 COUNT=\$(find . | wc -l)

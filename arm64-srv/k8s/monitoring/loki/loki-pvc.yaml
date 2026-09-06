@@ -1,19 +1,11 @@
-# Loki's whole world: /loki holds the WAL, the TSDB index, the chunks, the compactor's
-# working directory and the (unused) ruler state. Until this claim existed all of it was on
-# the container's writable layer, so every restart of the pod threw away every log line -
-# 54 restarts, none of them noticed, because promtail cheerfully carries on pushing and
-# Grafana shows an empty range rather than an error.
+# /loki is everything Loki has: WAL, TSDB index, chunks, compactor workdir, ruler state.
+# Before this claim it all sat on the container's writable layer, so 54 pod restarts each
+# silently discarded every log line - promtail keeps pushing and Grafana just shows an empty
+# range.
 #
-# 5Gi is generous on purpose. Loki is storing ~20 MB/day compressed here (610 MB received
-# over four days, 81 MB of chunks written), so the 30-day retention configured in
-# loki-configmap.yaml needs well under 1Gi; the rest is headroom for promtail now shipping
-# every namespace and for a bad day's worth of stack traces. Check before shrinking it:
-#   kubectl -n monitoring exec deploy/loki -- df -h /loki   # (no shell in the image, use
-#   kubectl -n monitoring get --raw ".../stats/summary" or the loki_ingester metrics)
-#
-# storageClassName is longhorn with numberOfReplicas 2, so this reserves 5Gi on *both*
-# nodes, and the class reclaim policy is Retain: deleting this PVC leaves the PV and its
-# data behind for a human to remove.
+# 5Gi is deliberate headroom: ~20 MB/day compressed means the 30-day retention in
+# loki-configmap.yaml needs well under 1Gi. Two Longhorn replicas, so this reserves 5Gi on
+# both nodes, and the class is Retain - deleting the PVC leaves the data for a human.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

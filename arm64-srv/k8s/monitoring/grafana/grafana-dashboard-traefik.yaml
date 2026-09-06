@@ -1,42 +1,15 @@
-# The ingress dashboard, file-provisioned into the "Platform" folder alongside
-# grafana-dashboard-cluster.yaml and grafana-dashboard-app.yaml.
+# The ingress dashboard, file-provisioned into the "Platform" folder alongside the cluster
+# and app dashboards. Two datasources, and the split is forced, not stylistic: traefik's
+# prometheus metrics carry no request path and no client IP (unbounded cardinality), so
+# every "top paths / clients / user agents" panel is LogQL over the access log instead.
+# That is also why accessLog goes to stdout - promtail only tails stdout.
 #
-# This one reads from two datasources, and which panel uses which is the only thing worth
-# understanding before editing a query here:
-#
-#   * traefik's prometheus metrics (job `traefik` in k8s-infra's prometheus.yaml) cover
-#     request rate, status code, latency histogram, throughput and connections, keyed by
-#     entrypoint / router / service. They are complete and cheap. They have NO label for
-#     request path and NO label for client IP - traefik omits both deliberately, because
-#     either would make cardinality unbounded.
-#   * the access log in Loki has both, because it is one line per request. Every "top
-#     paths" / "top client IPs" / "top user agents" panel is a LogQL query over
-#     {namespace="ingress", app="traefik", container="traefik"}.
-#
-# So the split is not stylistic: the questions in the second row are unanswerable from
-# prometheus at any scrape interval. This is also why traefik's accessLog was moved from a
-# file on its longhorn volume to stdout - promtail only tails container stdout, so while it
-# was a file none of these panels could exist.
-#
-# Three things that will look wrong and are not:
-#
-#   * 404 dominates every count panel. This cluster is scanned continuously through the
-#     Cloudflare tunnel (/wp-json, /*.php, /005.php ...); at the time this was written 143
-#     of 148 requests in twenty minutes were 404s. "Top 404 paths" and "Top clients hitting
-#     404s" exist to separate that from real traffic rather than to hide it.
-#   * `code="0"` in the status-code panel is not an HTTP status. traefik reports it for
-#     websocket upgrades.
-#   * latency appears twice. The prometheus histogram has four buckets (0.1/0.3/1.2/5s), so
-#     a percentile from it can only land on a bucket edge; the panels marked "exact" unwrap
-#     the per-request Duration field out of the log instead. The histogram is kept because
-#     it is the latency signal that survives Loki being unavailable.
-#
-# Admin traffic is excluded from request counts with `entrypoint!~"metrics|traefik"`, not by
-# listing the real entrypoints: prometheus scrapes :8082 every 15s and the kubelet probes
-# :8080 every 10s, which together are several times the real request rate, and a new public
-# entrypoint should appear on this dashboard without anyone editing it.
-#
-# Every query in here was run against the live prometheus and Loki before this landed.
+# Things that look wrong and are not: 404s dominate (the tunnel is scanned continuously,
+# hence the dedicated 404 panels); `code="0"` is a websocket upgrade, not a status; latency
+# appears twice because the histogram has four buckets, so percentiles land on bucket edges
+# and the "exact" panels unwrap Duration from the log - the histogram survives Loki being
+# down. Admin traffic is excluded by `entrypoint!~"metrics|traefik"` so a new public
+# entrypoint appears here without an edit.
 apiVersion: v1
 kind: ConfigMap
 metadata:

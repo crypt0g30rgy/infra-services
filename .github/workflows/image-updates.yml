@@ -1,21 +1,14 @@
 name: image updates
 
-# Asks the public registries once a week which of the images this repo pins have
-# moved on, and keeps the answer in one issue that gets rewritten in place rather
-# than a new issue every time - the issue's edit history is the changelog.
-#
-# It reports; it does not bump anything. Tag bumps stay a deliberate act, because
-# a cluster of one-replica volumes with no backup target is not somewhere to let a
-# robot roll a major version through unattended.
+# Weekly: asks the public registries which pinned images have moved on and rewrites one
+# issue in place, so its edit history is the changelog. It reports only - tag bumps stay
+# manual, since one-replica volumes with no backup target are no place for a robot to roll
+# a major version.
 
 on:
   schedule:
-    # Mondays at 06:15 UTC. Weekly rather than daily on purpose: a report you
-    # cannot act on before the next one arrives is just noise, and a week is
-    # enough time to actually work through the list.
-    #
-    # Off the hour because the top of the hour is when GitHub's scheduler is most
-    # oversubscribed and cron jobs get delayed the longest.
+    # Mondays 06:15 UTC. Weekly, because a report that arrives faster than it can be
+    # acted on is noise; off the hour, where GitHub's scheduler is least oversubscribed.
     - cron: "15 6 * * 1"
   workflow_dispatch:
     inputs:
@@ -24,8 +17,7 @@ on:
         required: false
         type: string
 
-# Only ever one of these in flight, and a newer run wins - a queued backlog of
-# last week's reports has no value.
+# One run at a time, newest wins - a backlog of last week's reports is worthless.
 concurrency:
   group: image-updates
   cancel-in-progress: true
@@ -43,17 +35,12 @@ jobs:
 
       - name: Check for newer image tags
         env:
-          # No registry credentials anywhere in this job, by design. Every
-          # registry it talks to hands a pull-scoped token to an anonymous
-          # caller, so there is nothing to log in to; internal registries are out
-          # of scope precisely because they would need a secret. If a busy hosted
-          # runner ever comes back HTTP 429, the report says so for those images
-          # rather than guessing - that is the correct failure, not a reason to
-          # put a token in here.
+          # No registry credentials, by design: every registry here gives anonymous
+          # callers a pull-scoped token, and internal registries are out of scope because
+          # they would need a secret. A 429 is reported per image rather than guessed at.
           #
-          # Through the environment rather than interpolated into the script:
-          # ${{ inputs.* }} is expanded before bash sees the line, so a dispatch
-          # input containing a semicolon would run as a command.
+          # Passed through the environment, not interpolated: ${{ inputs.* }} is expanded
+          # before bash sees it, so a semicolon in a dispatch input would run as a command.
           ONLY: ${{ inputs.only }}
         run: |
           set -euo pipefail
@@ -88,16 +75,14 @@ jobs:
             echo "cluster access to find pods still running a superseded digest."
           } > body.md
 
-          # Exact title match on a listing, not `gh issue list --search`: search
-          # tokenises the query, so a phrase can match loosely, and picking the
-          # wrong issue here would overwrite somebody's real one.
+          # Exact title match on a listing, not --search: search tokenises the query, and
+          # matching loosely here would overwrite a real issue.
           existing=$(gh issue list --repo "$REPO" --state open --limit 200 \
             --json number,title \
             --jq '[.[] | select(.title == env.TITLE) | .number] | first // empty')
 
-          # --body-file rather than --body throughout: the report is multi-line
-          # Markdown full of backticks and pipes, and pushing that through a
-          # shell argument is a quoting accident waiting to happen.
+          # --body-file throughout: the report is multi-line Markdown full of backticks
+          # and pipes, which is a quoting accident as a shell argument.
           if [ -n "$existing" ]; then
             gh issue edit "$existing" --repo "$REPO" --body-file body.md
             echo "Updated issue #$existing"

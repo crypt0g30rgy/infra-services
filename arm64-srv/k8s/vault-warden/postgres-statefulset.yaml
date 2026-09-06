@@ -14,48 +14,27 @@ spec:
       labels:
         app: postgres
     spec:
-      # Co-located with the vaultwarden deployment on dell, where its Longhorn
-      # replica physically is. See the note in vaultwarden-deployment.yaml.
-      #
-      # This moved the data directory from arm64 to x86_64. PostgreSQL does not
-      # officially support that - the on-disk format is platform-dependent - but
-      # both are 64-bit little-endian and the image is the same musl build, so
-      # the collations match. It started clean ("Skipping initialization",
-      # recovered from a clean shutdown) and all 29 table row counts matched the
-      # pre-migration pg_dumpall. Indexes were rebuilt with REINDEX DATABASE
-      # afterwards anyway, which is the one thing a collation difference would
-      # have corrupted. If this node ever moves arch again, dump and restore.
-      #
-      # That caveat is now moot for the current data: the 15 -> 18 upgrade below
-      # was a dump and restore, so the on-disk cluster was written from scratch
-      # by an x86_64 PostgreSQL 18 running on this node.
+      # Pinned to dell, where the Longhorn replica is and where vaultwarden runs.
+      # Moving a data directory between architectures is unsupported - if this ever
+      # moves arch again, dump and restore rather than reattaching the volume.
       nodeSelector:
         kubernetes.io/hostname: dell-amd64-srv
 
       containers:
         - name: postgres
-          # PostgreSQL 18. This was not a tag bump: 18 refuses to start on a
-          # data directory written by 15, so the database was dumped with
-          # pg_dumpall, the volume was emptied and the dump restored. Bumping
-          # the major here again without doing that leaves the pod in
-          # CrashLoopBackOff on "database files are incompatible with server".
+          # A major bump is never just a tag edit - PostgreSQL will not start on an
+          # older major's data directory. Dump, wipe, restore:
+          # ../../../maintenance/2026-09-05-postgres-15-to-18.md
           image: postgres:18-alpine
           ports:
             - containerPort: 5432
               name: postgres
           env:
-            # Explicit, and a *subdirectory* of the mount, for two reasons.
-            #
-            # postgres:18 changed the image's own default PGDATA to
-            # /var/lib/postgresql/18/docker and declares /var/lib/postgresql as
-            # the volume. Leave it unset and the cluster is initialised in the
-            # container's writable layer, outside the PVC mounted below, and is
-            # gone on the next pod restart - silently, because it starts fine.
-            #
-            # It also cannot be the mount root: this is a Longhorn ext4 volume,
-            # so /var/lib/postgresql/data contains lost+found and initdb refuses
-            # a non-empty directory. Up to 15 the data sat at the root because
-            # the volume used to be microk8s-hostpath, which has no lost+found.
+            # Keep explicit: postgres:18's own default moved to
+            # /var/lib/postgresql/18/docker, so unset means a cluster in the
+            # container's writable layer that starts fine and vanishes on restart.
+            # Must be a subdirectory - initdb refuses the ext4 mount root's
+            # lost+found.
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
 
@@ -82,15 +61,10 @@ spec:
         name: postgres-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        # Named explicitly instead of inheriting the cluster default. This used
-        # to be unset, which silently meant microk8s-hostpath - a directory on
-        # the pi, which is why this database could never move off that node.
-        #
-        # volumeClaimTemplates is immutable, so changing this on a live
-        # StatefulSet is not an edit: the StatefulSet has to be deleted and
-        # recreated. Do it with --cascade=orphan if the pod is running and you
-        # want it to keep running; the existing postgres-data-postgres-0 PVC is
-        # then adopted by name, not replaced. See ../longhorn/README.md.
+        # Explicit, because the unset default was microk8s-hostpath and pinned this
+        # database to the pi. volumeClaimTemplates is immutable: changing it means
+        # deleting the StatefulSet (--cascade=orphan keeps the pod and re-adopts the
+        # existing PVC by name). See ../longhorn/README.md.
         storageClassName: longhorn
         resources:
           requests:

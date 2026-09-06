@@ -1,33 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ============================================================
-# Cloudflare Multi-Zone Tunnel Registration
+# Point many Cloudflare zones at one Tunnel: creates the tunnel if missing, then
+# root + wildcard CNAMEs per zone, and writes the tunnel token to ./cloudflare-<name>/.
+# Idempotent - existing records are updated in place.
 #
-# One API token -> many Cloudflare zones -> one Tunnel
+# Needs curl, jq, and a token with Account > Cloudflare Tunnel: Edit and Zone >
+# DNS: Edit.
 #
-# Requirements:
-#   - curl
-#   - jq
-#   - Cloudflare API token
-#   - Cloudflare Account ID
-#
-# Required API permissions:
-#
-#   Account
-#     Cloudflare Tunnel: Edit
-#
-#   Zone
-#     DNS: Edit
-#
-# Usage:
-#
-#   export CF_API_TOKEN="cfat_..."
-#   export CF_ACCOUNT_ID="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-#
+#   export CF_API_TOKEN=... CF_ACCOUNT_ID=...
 #   ./cf-tunnel-register.sh my-tunnel example.com example.net
-#
-# ============================================================
 
 API="https://api.cloudflare.com/client/v4"
 
@@ -65,10 +47,8 @@ DOMAINS=("$@")
 AUTH_HEADER="Authorization: Bearer ${CF_API_TOKEN}"
 CONTENT_HEADER="Content-Type: application/json"
 
-# NOTE: no -f here. With -f, curl exits non-zero on HTTP 4xx/5xx and
-# discards the response body, which means check_response() never gets
-# a chance to show Cloudflare's actual error JSON before set -e kills
-# the script. We rely on check_response()'s `.success` check instead.
+# Deliberately no -f: it would discard the body on 4xx and let set -e kill the
+# script before check_response() can print Cloudflare's error JSON.
 api() {
     curl -sS \
         -H "$AUTH_HEADER" \
@@ -156,8 +136,7 @@ else
 
 fi
 
-# The CNAME target for Cloudflare Tunnel only depends on the tunnel ID,
-# not on any particular domain, so compute it once here.
+# Same target for every zone - it only depends on the tunnel ID.
 TARGET="${TUNNEL_ID}.cfargotunnel.com"
 
 echo
@@ -205,15 +184,7 @@ for DOMAIN in "${DOMAINS[@]}"; do
     echo "Zone:    $ZONE_NAME"
     echo
 
-    # --------------------------------------------------------
-    # DNS record creation
-    #
-    # The CNAME target for Cloudflare Tunnel is:
-    #
-    #   <TUNNEL_ID>.cfargotunnel.com
-    #
-    # Existing records are detected before creation.
-    # --------------------------------------------------------
+    # Create or retarget one CNAME -> $TARGET, proxied, TTL auto.
 
     create_dns_record() {
 

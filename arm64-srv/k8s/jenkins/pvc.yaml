@@ -6,16 +6,12 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  # Migrated off microk8s-hostpath. Jenkins' home holds the job config, plugins
-  # and build history, so it was copied with verification rather than recreated
-  # (unlike the disposable cache in cache-pvcs.yaml) - scale to 0, cp -a,
-  # compare digests, rebind, scale back up. See
-  # ../longhorn/README.md for the procedure.
+  # Migrated off microk8s-hostpath by copy-and-verify rather than recreated, since Jenkins'
+  # home holds job config, plugins and build history - unlike the disposable cache in
+  # cache-pvcs.yaml. Procedure in ../longhorn/README.md.
   #
-  # Note what this manifest does NOT do: it names no volumeName, so applying it
-  # against a deleted PVC provisions a fresh *empty* volume. Same as it always
-  # was with hostpath, but on Longhorn the old data is still sitting in a
-  # Released PV rather than a directory you would notice.
+  # No volumeName here, so applying this against a deleted PVC provisions a fresh EMPTY
+  # volume while the old data sits in a Released PV rather than a directory you would spot.
   storageClassName: longhorn
   resources:
     requests:

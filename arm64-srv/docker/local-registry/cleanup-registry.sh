@@ -1,40 +1,13 @@
 #!/bin/sh
-# Retention for the local Docker registry: delete old manifests through the v2
-# API, then garbage-collect the blobs they were holding on to.
+# Registry retention: delete old manifests over the v2 API, then GC their blobs. POSIX sh
+# because it runs in registry:3.x, the only image already carrying the `registry` binary the
+# GC half needs. See the registry-cleaner service in docker-compose.yml.
 #
-# POSIX sh on purpose (no arrays, no `local`, no pipefail). This runs inside the
-# `registry:3.1.1` image, whose shell is busybox ash - that image is used as the
-# cleaner precisely because it is the only one that already carries the
-# `registry` binary needed for the garbage-collect half of the job. See the
-# registry-cleaner service in docker-compose.yml.
-#
-# Two knobs, and a manifest has to fail BOTH to be deleted:
-#
-#   KEEP_LATEST   how many of the newest manifests in a repo are never touched
-#   MAX_AGE_DAYS  age below which a manifest is never touched
-#
-# So the default (1 / 7) means "keep the newest one forever, and keep everything
-# from the last week". A manifest is deleted only when it is neither. Set
-# MAX_AGE_DAYS=0 to collapse a repo to KEEP_LATEST immediately - that is what the
-# one-off cleanup on 2026-08-23 used, which took the registry from 430 manifests
-# to 33.
-#
-# Deletion is by DIGEST, which means every tag pointing at that digest goes with
-# it. CI pushes both a short and a long git sha, so tag counts are roughly
-# double the manifest counts and deleting "one thing" removes two names.
-#
-# Two protections exist because keep-newest is not the same as keep-what-is-used:
-#
-#   PROTECT_TAGS      never delete a manifest carrying one of these tags
-#                     (default "latest" - a dangling `latest` is worse than a
-#                     stale one, and nothing here republishes it)
-#   PROTECT_DIGESTS_FILE  a file of digests, one per line, never to be deleted.
-#                     Use it for what is actually deployed. This host cannot see
-#                     the cluster, so nothing can work that out by itself; the
-#                     list is produced with
-#                       kubectl get pods -A -o jsonpath='...' | ...
-#                     and two of the 24 images running on 2026-08-23 were NOT
-#                     the newest in their repo, so this is not hypothetical.
+# A manifest must fail both keep rules - KEEP_LATEST newest per repo and MAX_AGE_DAYS - and
+# is deleted by DIGEST, so every tag on it goes. Newest is not the same as in-use, hence
+# PROTECT_TAGS and PROTECT_DIGESTS_FILE (built from `kubectl get pods -A` elsewhere; two of
+# 24 running images were not newest in their repo). MAX_AGE_DAYS=0 collapses a repo to
+# KEEP_LATEST, which took 430 manifests to 33 on 2026-08-23.
 set -eu
 
 REGISTRY_URL="${REGISTRY_URL:-http://local-registry:5000}"
@@ -50,9 +23,8 @@ LOOP="${LOOP:-0}"
 CLEANUP_AT="${CLEANUP_AT:-03:30}"
 RUN_ON_START="${RUN_ON_START:-1}"
 
-# The registry is behind htpasswd (see config.yml `auth:`), so anonymous means
-# 401 on everything including the catalog. Fail with a useful sentence rather
-# than an empty repo list that looks like "nothing to do".
+# htpasswd is on (config.yml `auth:`), so anonymous gets 401 even on the catalog -
+# an empty repo list would otherwise look like "nothing to do".
 AUTH=""
 if [ -n "${REGISTRY_USER:-}" ]; then
   AUTH="-u ${REGISTRY_USER}:${REGISTRY_PASSWORD:-}"
@@ -67,18 +39,15 @@ ACCEPT="-H Accept:application/vnd.oci.image.index.v1+json \
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
-# ISO-8601 UTC timestamps sort correctly as plain strings, so ages are compared
-# without parsing dates - busybox `date -d` on an RFC3339 string with fractional
-# seconds is not something to rely on. Returns true when $1 is at or before the
-# cutoff. Fractional seconds make this off by at most one second, which does not
-# matter at day granularity.
+# True when $1 is at or before the cutoff. Compares ISO-8601 UTC as strings, since
+# lexicographic order is chronological and busybox `date -d` on RFC3339 with
+# fractional seconds is not reliable. Off by at most a second; granularity is days.
 older_than_cutoff() {
   [ "$(printf '%s\n%s\n' "$1" "$2" | sort | head -n1)" = "$1" ]
 }
 
-# The created date lives in the image config blob, one indirection away, and two
-# for a multi-arch index (index -> first child manifest -> config). Prints the
-# timestamp, or nothing if any hop fails.
+# Created date lives in the config blob: one hop, or two through a multi-arch index
+# (index -> first child -> config). Prints nothing if any hop fails.
 manifest_created() {
   _repo="$1"; _ref="$2"
   _man="$($CURL $ACCEPT "$REGISTRY_URL/v2/$_repo/manifests/$_ref" 2>/dev/null || echo '{}')"
@@ -194,10 +163,9 @@ one_pass() {
   trap - EXIT
   log "manifests: deleted=$deleted kept=$kept failed=$failed"
 
-  # Deleting a manifest only unlinks it. Blobs - which is where the gigabytes
-  # are - are only reclaimed here. --delete-untagged also collects the
-  # per-platform child manifests orphaned by deleting a multi-arch index, and
-  # the repos reported as "no tags" above.
+  # Deleting a manifest only unlinks it; this is where the gigabytes come back.
+  # --delete-untagged also sweeps child manifests orphaned by deleting a multi-arch
+  # index, and the "no tags" repos above.
   if [ "$RUN_GC" = "1" ]; then
     if ! command -v registry >/dev/null 2>&1; then
       log "SKIP gc: no registry binary in this image (run the cleaner from registry:3.x)"

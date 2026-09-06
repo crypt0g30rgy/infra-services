@@ -1,45 +1,32 @@
-# AdGuard Home — the LAN's DNS server, and the microk8s cluster's upstream
-# resolver. CoreDNS has `forward . /etc/resolv.conf` and both nodes' resolv.conf
-# is `nameserver 192.168.0.59`, so every name a pod looks up that is not a
-# cluster name arrives here. Breaking this file breaks the cluster.
+# AdGuard Home: the LAN's DNS and the cluster's upstream resolver — CoreDNS forwards
+# to /etc/resolv.conf and both nodes point at 192.168.0.59, so every non-cluster
+# lookup lands here. Breaking this file breaks the cluster.
 #
-# It runs on the pi out of /home/w3b/adguard, which is NOT a checkout of this
-# repo — see README.md. This file is the transcription of what is actually
-# there; keep them equal.
+# Runs on the pi from /home/w3b/adguard, which is not a checkout of this repo; this
+# is a transcription, keep the two equal. See README.md.
 services:
   adguardhome:
     image: adguard/adguardhome:v0.107.79
     container_name: adguardhome
     restart: unless-stopped
     networks:
-      # Plain user-defined bridge (172.19.0.0/16), shared with traefik and the
-      # monitoring stack. `./manage.sh up` creates it if it is missing, the same
-      # way ../monitoring/manage.sh does.
+      # Plain bridge (172.19.0.0/16) shared with traefik and monitoring;
+      # `./manage.sh up` creates it if missing.
       internal:
-      # NOT macvlan. This block used to be live in this file, uncommented,
-      # asking for 192.168.1.98 — a different /24 from the LAN, on a network
-      # `setup-macvlan.sh` builds as 192.168.1.0/24 while ../pi-hole's compose
-      # documents the same name as 192.168.0.0/24. Bringing AdGuard up that way
-      # gives it an address nothing on 192.168.0.0/24 can reach, publishes no
-      # ports, and takes DNS out for the whole cluster. Leave it commented.
+      # Leave commented. This was once live asking for 192.168.1.98 — the wrong /24
+      # for this LAN, unreachable, publishing no ports, which takes cluster DNS out.
       # macvlan_net:
       #   ipv4_address: 192.168.1.98
     ports:
-      # Published on 0.0.0.0, which is what makes 192.168.0.59:53 answer. Note
-      # that a published UDP port on a bridge network is served by a userspace
-      # `docker-proxy` process, not by kernel NAT — every DNS packet in the
-      # cluster is copied through it. It works, but it is a hop that would not
-      # exist if AdGuard were on the host network.
+      # 0.0.0.0, which is what makes 192.168.0.59:53 answer. Published UDP on a
+      # bridge goes through userspace docker-proxy rather than kernel NAT, so every
+      # cluster DNS packet is copied — a hop host networking would remove.
       - "3000:3000"
       - "53:53/tcp"
       - "53:53/udp"
     volumes:
-      # All of the state, and the only two paths worth keeping:
-      #   ./config/AdGuardHome.yaml  the entire configuration, ~4 KB
-      #   ./work                     query log, statistics, downloaded filters
-      #                              (~420 MB — .gitignore'd, do not commit)
-      # The container is disposable. `docker compose down` and `up` loses
-      # nothing as long as these two directories survive.
+      # All the state, so the container is disposable: ./config holds the ~4 KB
+      # config, ./work the query log, stats and filters (~420 MB, gitignored).
       - ./work:/opt/adguardhome/work
       - ./config:/opt/adguardhome/conf
     environment:
@@ -50,8 +37,8 @@ services:
       # --------------------------
       # Internal Router
       # --------------------------
-      # ADGUARD_INTERNAL_HOST comes from ./.env, which is not in this repo
-      # (`*.env*` is gitignored). README.md has the one line it needs.
+      # ADGUARD_INTERNAL_HOST comes from ./.env, which is gitignored; README.md has
+      # the one line it needs.
       - "traefik.http.routers.adguard.rule=Host(`${ADGUARD_INTERNAL_HOST}`)"
       - "traefik.http.routers.adguard.entrypoints=websecure"
       - "traefik.http.routers.adguard.tls=true"
@@ -62,11 +49,9 @@ services:
       # --------------------------
       - "traefik.http.services.adguard.loadbalancer.server.port=3000"
 
-    # Compose v2 honours these outside swarm; verified applied on the running
-    # container (NanoCpus 250000000, Memory 268435456). A quarter of a core is
-    # not much for a resolver whose only upstream is DNS-over-HTTPS — every
-    # cache miss is a TLS handshake and an HTTP/2 round trip on that budget.
-    # Raise it before blaming the network if latency is the symptom.
+    # Compose v2 honours these outside swarm (verified on the running container).
+    # A quarter core is tight for a DoH-only resolver — every cache miss is a TLS
+    # handshake, so raise this before blaming the network for latency.
     deploy:
       resources:
         limits:

@@ -22,50 +22,29 @@ data:
       kubernetes_sd_configs:
       - role: pod
 
-      # `cri`, not `docker`. microk8s runs containerd, so a line on disk looks like
-      # `2026-08-26T18:11:00.30Z stdout F [Nest] ... `, not the docker runtime's
-      # `{"log":"...","stream":"stdout","time":"..."}`. The docker stage could not parse
-      # any of it, so every line reached Loki with the timestamp/stream/partial-flag
-      # prefix still glued to the front of the message: unreadable in a log panel,
-      # undetectable by Loki's level detection (every stream came out
-      # `detected_level="unknown"`), and timestamped when promtail read the file rather
-      # than when the container wrote it.
-      #
-      # The `json` stage that used to follow is gone with it: those expressions are
-      # nginx/ingress field names, nothing here emits them at the top level of a log
-      # line, and without a `labels` stage nothing was promoted anywhere regardless - it
-      # was a failed JSON parse per line, for every container in the cluster.
+      # `cri`, not `docker`: microk8s runs containerd, so lines on disk are
+      # `<ts> stdout F <msg>`. With the docker stage nothing parsed, so every line kept
+      # its ts/stream prefix, had promtail's read time as its timestamp, and came out
+      # detected_level="unknown". The `json` stage that followed went too - its
+      # expressions were nginx field names nothing here emits.
       pipeline_stages:
       - cri: {}
 
-      # Strip ANSI colour codes. Nest's logger colourises its output whether or not it is
-      # writing to a terminal, so every line stored in Loki carried `\x1b[32m` style
-      # escapes around the level and the context. Grafana's log panel renders them as
-      # literal `[32m`, they defeat Loki's level detection (every stream came out
-      # `detected_level="unknown"`), and any line filter written against the visible text
-      # has to guess where the escapes fall. Cheaper to remove them here, once, than to
-      # change the logger in thirteen services.
-      #
-      # The whole pattern is a capture group on purpose: promtail's replace stage
-      # substitutes captured groups, so an expression with none matches and changes
-      # nothing.
+      # Strip ANSI colour: Nest's logger colourises even when not on a terminal, which
+      # Grafana renders as literal `[32m`, breaks Loki's level detection, and makes line
+      # filters guess where the escapes fall. Cheaper here than in thirteen services.
+      # The whole pattern must be a capture group - replace substitutes groups, so an
+      # expression without one changes nothing.
       - replace:
           expression: '(\x1b\[[0-9;]*m)'
           replace: ''
 
       relabel_configs:
 
-      # Which node's pods this promtail is responsible for. `role: pod` discovers
-      # every pod in the cluster, and promtail keeps only the targets whose
-      # `__host__` equals its own hostname - so with this label unset, every
-      # target was dropped, on both nodes. That is the difference between "the
-      # positions file says `positions: {}`" and "logs reach Loki"; it is also
-      # invisible, because a promtail tailing nothing is Running and Ready and
-      # logs no error.
-      #
-      # Paired with HOSTNAME in promtail-daemonset.yaml, which has to be the NODE
-      # name: promtail's own hostname is the pod name, which never matches
-      # `__meta_kubernetes_pod_node_name` for anything.
+      # Required: `role: pod` discovers the whole cluster and promtail keeps only
+      # targets whose __host__ matches its own hostname, so unset means every target
+      # dropped on both nodes - silently, since a promtail tailing nothing stays Ready.
+      # Pairs with HOSTNAME in promtail-daemonset.yaml, which must be the NODE name.
       - source_labels: [__meta_kubernetes_pod_node_name]
         target_label: __host__
 

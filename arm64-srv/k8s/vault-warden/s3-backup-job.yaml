@@ -177,24 +177,16 @@ spec:
           restartPolicy: Never
           containers:
           - name: backup
-            # The shared backup image, pinned by multi-arch *index* digest: this
-            # cluster is arm64 + amd64 and a per-platform digest would be
-            # unpullable on one node (verified by resolving the tag on both and
-            # comparing imageIDs). Refresh with
-            # `crane digest registry.internal.xboy.me/tools/s3-backup:2.0.0`.
-            #
-            # It replaces vaultwarden-backup:1.0.0 - what was actually running -
-            # and the ghcr.io/your-org placeholder this file used to carry, which
-            # matched nothing. Everything the script needs is baked in: bash,
+            # Shared backup image, pinned by multi-arch *index* digest - a per-platform
+            # digest is unpullable on one of the two nodes. Refresh with
+            # `crane digest registry.internal.xboy.me/tools/s3-backup:2.0.0`. Ships bash,
             # aws-cli, pg_dump 18.6, tar, gzip, sha256sum, GNU date, grep and sed.
             image: registry.internal.xboy.me/tools/s3-backup:2.0.0@sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e
             imagePullPolicy: IfNotPresent
             command:
               - /scripts/backup.sh
-            # The image runs as uid 100 (`scripts`) and needs nothing more: it
-            # installs nothing, and the only paths written during a run are under
-            # /tmp, which is the emptyDir below. /data is mounted read-only and is
-            # world-readable, so uid 100 can tar it without owning it.
+            # uid 100 (`scripts`) is enough: nothing is installed, the only writes go to
+            # the /tmp emptyDir, and the read-only /data mount is world-readable.
             securityContext:
               runAsNonRoot: true
               runAsUser: 100
@@ -206,9 +198,8 @@ spec:
               seccompProfile:
                 type: RuntimeDefault
             env:
-            # The AWS CLI keeps its config under $HOME, so HOME has to point at
-            # the writable emptyDir - with readOnlyRootFilesystem the image's own
-            # home directory is not writable.
+            # The AWS CLI writes config under $HOME, which readOnlyRootFilesystem makes
+            # unwritable - point it at the emptyDir.
             - name: HOME
               value: /tmp
             # aws s3 configuration
@@ -270,10 +261,9 @@ spec:
             configMap:
               name: vaultwarden-backup-script
               defaultMode: 0755
-          # HOME, the AWS CLI's config, both archives and their checksums all live
-          # here. A sizeLimit so a runaway backup gets the pod evicted instead of
-          # filling the pi's node disk - the same disk the control plane and every
-          # Longhorn attachment are on.
+          # HOME, the AWS config, both archives and their checksums. sizeLimit so a
+          # runaway backup is evicted instead of filling the node disk the control plane
+          # lives on.
           - name: work
             emptyDir:
               sizeLimit: 4Gi
