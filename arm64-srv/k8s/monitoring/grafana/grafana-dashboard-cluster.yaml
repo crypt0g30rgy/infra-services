@@ -1,25 +1,13 @@
-# The cluster dashboard, file-provisioned into the "Platform" folder - see
-# grafana-dashboards-provider.yaml, which mounts this ConfigMap and
-# grafana-dashboard-app.yaml into the same directory.
+# The cluster dashboard, file-provisioned into the "Platform" folder by
+# grafana-dashboards-provider.yaml. Sources are prometheus's own scrape jobs (kubelet,
+# cadvisor, collector telemetry, prometheus) plus Loki, so it survives every application
+# being down; per-service panels live in grafana-dashboard-app.yaml instead.
 #
-# Everything on it comes from prometheus's own scrape jobs (kubelet, cadvisor through the
-# apiserver node proxy, the collector's internal telemetry on :8888, prometheus itself)
-# plus Loki, so it keeps working when every application is down - which is when a cluster
-# dashboard is worth having. Per-service panels are deliberately not here; they are in
-# grafana-dashboard-app.yaml, which depends on services being instrumented.
-#
-# Every query in it was run against this cluster's prometheus and Loki before it was
-# committed. Two label details that are easy to get wrong and produce a silently empty
-# panel:
-#
-#   * cadvisor's node-total series are the ones with `id="/"` (the root cgroup). Without
-#     that matcher the same metric name means "one series per container".
-#   * `container_fs_usage_bytes` here is per-device on `id="/"` only; this cadvisor does
-#     not report a per-container filesystem, so a `container!=""` filter returns nothing.
-#
-# `prometheus.yml` in k8s-infra drops most of cadvisor at ingestion (a keep-list on the
-# metric name) to hold the series count down on a 5Gi TSDB, so a new panel here may need
-# that list widened first: infrastructure/base/monitoring/prometheus.yaml.
+# Two label traps that silently empty a panel: cadvisor's node totals are the `id="/"`
+# series (without that matcher the metric is per-container), and container_fs_usage_bytes
+# exists only on `id="/"`, so a `container!=""` filter returns nothing. New panels may also
+# need k8s-infra's prometheus keep-list widened - it drops most of cadvisor at ingestion to
+# fit a 5Gi TSDB.
 apiVersion: v1
 kind: ConfigMap
 metadata:

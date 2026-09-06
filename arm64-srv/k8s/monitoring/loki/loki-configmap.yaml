@@ -1,16 +1,9 @@
-# Loki's static configuration.
-#
-# The deployment used to run on the image's built-in /etc/loki/local-config.yaml, which is
-# a single-binary demo config: filesystem storage under /loki, and no retention at all
-# (`compactor.retention_enabled: false`, `limits_config.retention_period: 0s`). That is
-# survivable while /loki is a container filesystem that gets wiped on every restart. It is
-# not survivable on a persistent volume - the volume simply fills, and a full /loki wedges
-# the ingester rather than dropping old data.
-#
-# So: this file exists because loki-pvc.yaml exists. It is the demo config with the paths
-# and schema it was already using (verified against the running process's /config
-# endpoint before it was written, so the on-disk layout does not change and existing
-# chunks stay readable), plus retention, plus a quieter log level.
+# Loki's static config. Exists because loki-pvc.yaml does: the image's built-in
+# local-config.yaml has no retention, which is fine on a container filesystem wiped every
+# restart but fills a persistent volume, and a full /loki wedges the ingester instead of
+# dropping old data. Paths and schema are copied from what the process was already running
+# (checked against its /config endpoint) so existing chunks stay readable; retention and a
+# quieter log level are the additions.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -23,12 +16,9 @@ data:
     server:
       http_listen_port: 3100
       grpc_listen_port: 9096
-      # `info` is the default and it is very expensive here: loki logs one ~2 KB line per
-      # query per subquery (caller=metrics.go, every cache counter it has), promtail ships
-      # those lines straight back into loki, and a Grafana dashboard with twelve log panels
-      # refreshing on a timer becomes its own busiest tenant. Drop to warn; put it back to
-      # info temporarily when debugging a slow query, since those lines are where the
-      # timing breakdown lives.
+      # Not the default `info`: that is one ~2 KB line per subquery, which promtail ships
+      # straight back in, so a dashboard on a refresh timer becomes loki's busiest tenant.
+      # Back to info temporarily to debug a slow query - the timings are in those lines.
       log_level: warn
 
     common:
@@ -38,17 +28,15 @@ data:
         filesystem:
           chunks_directory: /loki/chunks
           rules_directory: /loki/rules
-      # Single binary, single replica. Not a cluster: the ring is in memory and nothing
-      # else joins it.
+      # Single binary, single replica - the ring is in memory and nothing joins it.
       replication_factor: 1
       ring:
         kvstore:
           store: inmemory
 
-    # Unchanged from what the process was already running - v13/tsdb on the filesystem
-    # object store, 24h index period. Do not edit an existing entry: schema changes are
-    # applied by *appending* a config with a future `from` date, and rewriting this one
-    # makes loki look for existing index files under a layout they were never written in.
+    # As the process was already running it. Never edit an entry in place - schema changes
+    # are appended with a future `from` date; rewriting this one makes loki look for
+    # existing indexes under a layout they were never written in.
     schema_config:
       configs:
         - from: "2020-10-24"
@@ -61,24 +49,19 @@ data:
 
     compactor:
       working_directory: /loki/compactor
-      # The retention half of the deal. Without `retention_enabled` the compactor
-      # compacts and never deletes, and `retention_period` below is silently ignored.
-      # `delete_request_store` is not optional once retention is on - loki refuses to
-      # start without it.
+      # Without this the compactor never deletes and `retention_period` is silently
+      # ignored. `delete_request_store` becomes mandatory once retention is on.
       retention_enabled: true
       delete_request_store: filesystem
       compaction_interval: 10m
       retention_delete_delay: 2h
 
     limits_config:
-      # 30 days. At the ~20 MB/day this cluster produces that is under 1Gi of the 5Gi
-      # volume, so the limit that actually bites is this one rather than the disk - which
-      # is the right way round. Raising it is free until it isn't; check
-      # `df -h /loki` first.
+      # 30 days. At ~20 MB/day that is under 1Gi of the 5Gi volume, so time is the binding
+      # limit rather than disk - check `df -h /loki` before raising it.
       retention_period: 720h
-      # Lets Grafana's log-volume histogram (the bar chart above Explore results, and the
-      # rate() panels on the dashboards) be answered from the index instead of by reading
-      # chunks.
+      # Answers Grafana's log-volume histogram and rate() panels from the index instead of
+      # by reading chunks.
       volume_enabled: true
       reject_old_samples: true
       reject_old_samples_max_age: 168h
@@ -90,8 +73,7 @@ data:
             enabled: true
             max_size_mb: 100
 
-    # No ruler and no alertmanager in this cluster; the default config points the ruler at
-    # localhost:9093, which does not exist. Left pointing nowhere deliberately rather than
-    # removed, so that the day someone adds alerting the wiring is one line.
+    # There is no alertmanager here. Left pointing at the default nowhere-address on purpose,
+    # so adding alerting later is a one-line change.
     ruler:
       alertmanager_url: http://localhost:9093

@@ -1,125 +1,77 @@
-# Longhorn Helm values for this cluster.
-#
-# Longhorn replaces the microk8s hostpath provisioner as the storage layer. The
-# point is not redundancy (see the replica note below) - it is that a Longhorn
-# volume is reachable from *either* node over iSCSI, so a workload is no longer
-# nailed to the machine whose disk happens to hold its directory.
-#
-# Install / upgrade:
+# Longhorn Helm values. Replaces the microk8s hostpath provisioner - not for
+# redundancy (one replica, see below) but so a volume is reachable over iSCSI from
+# either node instead of pinning its workload to one machine.
 #
 #   helm upgrade --install longhorn longhorn/longhorn \
 #     --namespace longhorn-system --create-namespace \
 #     --version 1.12.1 -f arm64-srv/k8s/longhorn/values.yaml
 #
-# The chart repo (https://charts.longhorn.io) may be blocked from some networks;
-# the chart also lives in the tagged source tree at
-# https://codeload.github.com/longhorn/longhorn/tar.gz/refs/tags/v1.12.1
-# under chart/.
-#
-# See README.md in this directory for the node prerequisites and the migration
-# procedure.
+# Node prerequisites and the migration procedure are in README.md here. If
+# charts.longhorn.io is blocked, the chart is also in the tagged source tree under
+# chart/.
 
 csi:
-  # Longhorn defaults every CSI sidecar to 3 replicas, which assumes a cluster of
-  # at least 3 nodes. On two nodes that is 12 leader-electing pods competing to
-  # do the work of 2, and the parallel image pulls alone were enough to trip
-  # Docker Hub's anonymous rate limit. Two replicas each still survives losing a
-  # node.
+  # Down from the chart's 3, which assumes 3+ nodes: on two nodes that was 12
+  # leader-electing pods, and the parallel pulls tripped Docker Hub's anonymous
+  # rate limit. Two still survives losing a node.
   attacherReplicaCount: 2
   provisionerReplicaCount: 2
   resizerReplicaCount: 2
   snapshotterReplicaCount: 2
 
-  # microk8s does not use /var/lib/kubelet. It symlinks it to the snap path, and
-  # relying on the symlink for bidirectional mount propagation is exactly the
-  # kind of thing that half-works, so point the CSI plugin at the real path.
+  # microk8s only symlinks /var/lib/kubelet; give the CSI plugin the real path so
+  # bidirectional mount propagation is not relying on the symlink.
   kubeletRootDir: /var/snap/microk8s/common/var/lib/kubelet
 
 persistence:
   createStorageClass: true
-  # The cluster default, as of the last hostpath PVC being migrated. It was
-  # false for the duration of the migration so that nothing new could land on
-  # Longhorn while volumes were still being moved one at a time.
-  #
-  # Flipping this is not optional housekeeping: a PVC with no storageClassName
-  # gets the default, so leaving microk8s-hostpath as the default would have
-  # quietly put every future volume back on a directory on the pi and undone the
-  # whole exercise one manifest at a time.
-  #
-  # microk8s-hostpath's own default annotation had to be removed by hand at the
-  # same time - it is created by the microk8s addon, not by this chart, and two
-  # StorageClasses both claiming to be the default is an error state:
+  # The cluster default since the last hostpath PVC was migrated, so a PVC with no
+  # storageClassName no longer lands on a directory on the pi. Two default classes
+  # is an error state, so the addon's own annotation was removed by hand:
   #
   #   kubectl annotate sc microk8s-hostpath \
   #     storageclass.kubernetes.io/is-default-class-
   defaultClass: true
   defaultClassReplicaCount: 1
-  # A deleted PVC must not take the data with it. This is the single most
-  # important line in this file.
+  # A deleted PVC must not take the data with it. Do not change.
   reclaimPolicy: Retain
   defaultDataLocality: disabled
 
 defaultSettings:
-  # Only nodes labelled node.longhorn.io/create-default-disk=true contribute
-  # storage. Today that is dell-amd64-srv alone:
+  # Only nodes labelled node.longhorn.io/create-default-disk=true hold storage,
+  # which is dell alone. The pi is excluded on purpose: its root filesystem is a
+  # >90%-full microSD card also carrying the control plane. It still attaches
+  # volumes normally, it just hosts no replicas.
   #
   #   kubectl label node dell-amd64-srv node.longhorn.io/create-default-disk=true
-  #
-  # The pi is deliberately excluded. Its root filesystem is a microSD card that
-  # also carries a separate Docker stack and the whole microk8s image store, and
-  # it has been over 90% full. Putting replica write traffic on it would wear the
-  # card and risk filling the disk that the control plane lives on. The pi still
-  # runs longhorn-manager and the CSI plugin, so pods there can attach volumes
-  # normally - it just does not host replicas.
   createDefaultDiskLabeledNodes: true
   defaultDataPath: /var/lib/longhorn
 
-  # ONE replica, because only one node contributes a disk. This is the same
-  # redundancy the hostpath provisioner gave (none), on better media. To get a
-  # real second copy: free space on the pi or attach an external SSD to it,
-  # label it, then raise this to 2 - Longhorn rebuilds the extra replicas online
-  # with no downtime. Until then, take backups; a single replica is a single
-  # disk failure away from gone.
+  # ONE replica, because only one node has a disk - no redundancy, same as hostpath
+  # gave. Label a second disk and raise this to 2 and Longhorn rebuilds online.
+  # Until then a single disk failure loses the volume, so take backups.
   defaultReplicaCount: 1
 
-  # With one storage node, hard anti-affinity would make a 2-replica volume
-  # permanently Degraded rather than silently stacking both copies on one disk.
-  # Keep the honest failure.
+  # Hard anti-affinity: with one storage node a 2-replica volume goes Degraded
+  # instead of quietly stacking both copies on the same disk.
   replicaSoftAntiAffinity: false
 
   storageMinimalAvailablePercentage: 15
   storageOverProvisioningPercentage: 100
 
-  # guaranteedInstanceManagerCPU is left at the chart default of 12 (percent of
-  # node capacity) ON PURPOSE, because that number is right for dell, which
-  # holds every replica and therefore does the actual disk work: 12% of 8 cores
-  # = 960m.
-  #
-  # The pi cannot afford it. 12% of its 4 cores is 480m, and the pi already has
-  # ~3670m of 4000m *requested* by the workloads pinned to it, so the
-  # instance-manager pod was rejected outright with
-  #
-  #   Warning OutOfcpu  Node didn't have enough resource: cpu,
-  #   requested: 480, used: 3670, capacity: 4000
-  #
-  # and with no instance-manager on the pi, no volume can attach to a pod there
-  # (the engine process runs on the node the pod is on, not the node the replica
-  # is on). Symptom is a pod stuck ContainerCreating behind
-  # "FailedAttachVolume ... DeadlineExceeded ... failed to attach to node".
-  #
-  # A per-node override fixes just the pi and leaves dell alone. This is a CR
-  # field, not a Helm value, so it has to be applied after install:
+  # guaranteedInstanceManagerCPU stays at the chart default of 12 (% of capacity),
+  # which suits dell - it holds every replica. The pi cannot pay 480m and had its
+  # instance-manager rejected with OutOfcpu, which blocks *any* volume attaching to
+  # a pod there (the engine runs where the pod is). Fixed per-node after install;
+  # this is a CR field, not a Helm value:
   #
   #   kubectl patch nodes.longhorn.io -n longhorn-system pi-5-16gb-srv-0 \
   #     --type=merge -p '{"spec":{"instanceManagerCPURequest":200}}'
   #
-  # 200 is millicores, and it is a *request* with no matching limit - a floor
-  # for the scheduler, not a cap - so the engine processes can still burst past
-  # it when a volume is busy. Raise it once something big leaves the pi (moving
-  # Jenkins to dell alone frees 500m).
+  # A request with no limit, so engines still burst. Raise it when something large
+  # leaves the pi.
 
-  # Guard rail: uninstalling Longhorn while volumes exist requires flipping this
-  # to true first. Leave it off.
+  # Guard rail: uninstalling with volumes present needs this true first. Leave off.
   deletingConfirmationFlag: false
 
 longhornUI:

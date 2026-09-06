@@ -1,32 +1,18 @@
-# Bugsink on the amd64 node - one instance per node, this is the amd64 one.
-# The arm64 instance is ../../../arm64-srv/docker/bugsnik/, and that directory
-# holds the full README; only the differences are explained here.
+# Bugsink on the amd64 node. The arm64 instance and the full README are in
+# ../../../arm64-srv/docker/bugsnik/; only the differences live here. No traefik on
+# this host, so no router labels and no `internal` network (which is why this is a
+# separate file, not a copy) - it is reached directly on ${BUGSINK_HOST_PORT} and
+# BASE_URL is host:port rather than an https name.
 #
-# What differs on this node, and why this is a separate file rather than a copy:
-#
-#   * No traefik on this host, so no router labels and no `internal` network.
-#     This host's networks are `proxy`, `meet-to-meat` and the per-project
-#     bridges; the arm64 file joins an external network named `internal` that
-#     does not exist here, so that file cannot be applied on this node at all.
-#   * Reached directly on ${BUGSINK_HOST_PORT} (8000 here, 8001 on arm64 where
-#     traefik owns 443).
-#   * BASE_URL therefore has to be the host:port, not an https name.
-#
-# ---------------------------------------------------------------------------
-# BEFORE THE NEXT `docker compose up` ON THIS HOST - READ THIS
-# ---------------------------------------------------------------------------
-# The container running right now was started without the ./data bind mount, so
-# /data/db.sqlite3 (684K as of 2026-09-05) lives in the container's writable
-# layer. `docker compose down`, `--force-recreate`, or any `up` that decides to
-# replace the container deletes it. Rescue it first:
+# CAUTION: the container currently running predates the ./data bind mount, so
+# /data/db.sqlite3 is still in its writable layer and any recreate deletes it.
+# Rescue it before the next `up`:
 #
 #   docker compose stop bugsink        # stop, NOT down - down removes the layer
 #   mkdir -p data && sudo chown -R 14237:14237 data
 #   docker cp bugsink:/data/db.sqlite3 data/db.sqlite3
 #   sudo chown 14237:14237 data/db.sqlite3
-#   docker compose up -d               # recreates, this time on the bind mount
-#
-# The bind mount below is what stops this from being true a second time.
+#   docker compose up -d               # recreates onto the bind mount
 
 services:
   bugsink:
@@ -34,36 +20,30 @@ services:
     container_name: bugsink
     restart: unless-stopped
 
-    # Every setting comes from .env; the two below are derived from it so a host
-    # name is written down exactly once.
+    # Everything lives in .env; the two below are derived from it.
     env_file:
       - .env
 
     environment:
-      # No proxy in front of this instance, so the browser reaches it on the
-      # published port and BASE_URL has to say so. No trailing slash.
-      #
-      # It deliberately does NOT use ${BUGSINK_INTERNAL_HOST}: that name belongs
-      # to the arm64 instance and resolves to that node, so using it here would
-      # build DSNs and alert links that point at the other server. Set
-      # BUGSINK_NODE_HOST in .env to this node's name or address; the default
-      # below is its current LAN address.
+      # No proxy here, so this is the published port, no trailing slash. Not
+      # ${BUGSINK_INTERNAL_HOST} - that name resolves to the arm64 node, and using it
+      # would build DSNs pointing at the other server. Override BUGSINK_NODE_HOST in
+      # .env; the default is this node's current LAN address.
       BASE_URL: "http://${BUGSINK_NODE_HOST:-192.168.0.60}:${BUGSINK_HOST_PORT}"
       # Django answers 400 to any Host not listed here.
       ALLOWED_HOSTS: "${BUGSINK_NODE_HOST:-192.168.0.60},dell-amd64-srv,127.0.0.1,localhost"
-      # There is no reverse proxy terminating TLS on this node, so the arm64
-      # file's BEHIND_HTTPS_PROXY=true would make Django expect an X-Real-Ip and
-      # an https scheme that never arrive - every login POST would fail CSRF.
+      # Nothing terminates TLS here, so the arm64 file's `true` would have Django
+      # expecting an X-Real-Ip and https scheme that never arrive - CSRF failures on
+      # every login POST.
       BEHIND_HTTPS_PROXY: "false"
 
     ports:
       - "${BUGSINK_HOST_PORT}:${PORT}"
 
     volumes:
-      # db.sqlite3 lives here. The image runs as uid/gid 14237 and docker
-      # creates a missing bind-mount source as root, so this must exist and be
-      # owned by 14237 BEFORE the first `up` or migrations die read-only:
-      #   mkdir -p data && sudo chown -R 14237:14237 data
+      # db.sqlite3 lives here. Must exist and be owned by the image's uid 14237
+      # BEFORE the first `up`, or docker creates it root-owned and migrations fail
+      # read-only:  mkdir -p data && sudo chown -R 14237:14237 data
       - ./data:/data
 
     security_opt:
@@ -80,9 +60,8 @@ services:
     deploy:
       resources:
         limits:
-          # Lower than the arm64 instance's 768M on purpose: this node reserves
-          # 6Gi for non-Kubernetes processes and is the one that ran out of
-          # memory on 2026-09-05. See ../../../incidents/2026-09-05-node-hardening.md
+          # Below the arm64 instance's 768M on purpose: this is the node that ran out
+          # of memory on 2026-09-05. See ../../../incidents/2026-09-05-node-hardening.md
           cpus: "1.0"
           memory: 512M
         reservations:

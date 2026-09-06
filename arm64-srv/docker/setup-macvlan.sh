@@ -3,16 +3,10 @@
 
 #!/usr/bin/env bash
 #
-# setup-macvlan.sh
+# Creates a Docker macvlan network plus a host "shim" interface, since macvlan otherwise
+# isolates the host from its own containers.
 #
-# Creates a Docker macvlan network and a "shim" interface on the host so the
-# host itself can reach containers on that macvlan network (macvlan networks
-# normally isolate the host from the containers).
-#
-# Usage:
-#   sudo ./setup-macvlan.sh
-#   sudo ./setup-macvlan.sh --install-service   # also install+enable systemd unit
-#   sudo ./setup-macvlan.sh --uninstall         # tear everything down
+#   sudo ./setup-macvlan.sh [--install-service | --uninstall]
 #
 set -euo pipefail
 

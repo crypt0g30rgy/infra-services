@@ -6,15 +6,10 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 2
-  # A ReadWriteOnce claim cannot be attached to two pods at once, and a rolling update
-  # wants the new pod Ready before it removes the old one - which never happens, because
-  # the new pod cannot mount the volume. `maxSurge: 0` takes the few seconds of downtime
-  # instead, on a single-replica dashboard.
-  #
-  # Not `type: Recreate`, which is the more obvious spelling of the same intent: the API
-  # server has already defaulted `spec.strategy.rollingUpdate` on the live Deployment, and
-  # an apply that switches the type while that field is still set is rejected with
-  # `spec.strategy.rollingUpdate: Forbidden`.
+  # maxSurge 0 because the RWO claim cannot attach twice: a surged pod never becomes Ready,
+  # so the rollout never finishes. Trades a few seconds of downtime for that. Not
+  # `type: Recreate` - the live object already has a defaulted spec.strategy.rollingUpdate,
+  # and switching type while it is set is rejected as Forbidden.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -28,9 +23,8 @@ spec:
       labels:
         app: grafana
     spec:
-      # 472 is the `grafana` user in the official image. fsGroup is what makes the
-      # freshly provisioned longhorn volume writable by it; without it Grafana exits with
-      # "failed to connect to database: unable to open database file".
+      # 472 is the image's `grafana` user; fsGroup is what makes a fresh Longhorn volume
+      # writable by it, otherwise Grafana exits "unable to open database file".
       securityContext:
         runAsUser: 472
         runAsGroup: 472
@@ -42,10 +36,9 @@ spec:
         ports:
         - containerPort: 3000
         env:
-        # Both of these are calls out to grafana.com on a timer - usage reporting and the
-        # version/plugin update check. They are also a standing share of this cluster's
-        # failing DNS: `grafana.com` was one of the names timing out upstream while the
-        # resolver was struggling, for a feature nobody here uses.
+        # Both are timed calls out to grafana.com (usage reporting, update checks) for
+        # features nobody here uses - and grafana.com was one of the names timing out while
+        # the resolver was struggling.
         - name: GF_ANALYTICS_REPORTING_ENABLED
           value: "false"
         - name: GF_ANALYTICS_CHECK_FOR_UPDATES
@@ -63,9 +56,8 @@ spec:
         - name: dashboards
           mountPath: /etc/grafana/dashboards
           readOnly: true
-        # /api/health answers without auth and reports the database as well as the
-        # process, which is the failure this Deployment is most likely to have now that
-        # there is a volume to fail to mount.
+        # /api/health needs no auth and covers the database, not just the process - which
+        # is the likely failure now that there is a volume to fail to mount.
         readinessProbe:
           httpGet:
             path: /api/health
@@ -97,11 +89,10 @@ spec:
       - name: dashboards-provider
         configMap:
           name: grafana-dashboards-provider
-      # Projected, because each dashboard is its own ConfigMap - one per dashboard keeps
-      # each diff readable and keeps every one of them well inside the 1 MiB limit on a
-      # single ConfigMap - and they have to arrive in the same directory for one provider to
-      # pick them up. Adding a dashboard means a new ConfigMap *and* a source here; a
-      # ConfigMap that exists but is not listed is applied, healthy and invisible.
+      # Projected because each dashboard is its own ConfigMap (readable diffs, well inside
+      # the 1 MiB limit) but they must land in one directory for a single provider to read
+      # them. A new dashboard needs a ConfigMap *and* a source here - one that is applied
+      # but unlisted is healthy and invisible.
       - name: dashboards
         projected:
           sources:

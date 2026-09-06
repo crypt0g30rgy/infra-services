@@ -1,18 +1,10 @@
-# Seed copy of AdGuard Home's configuration.
+# Seed copy, NOT the live file — AdGuard rewrites its own config (comments and all)
+# on every UI change and schema migration, so this is never bind-mounted directly.
+# `./manage.sh up` seeds ./config only when empty, `diff` shows drift, `save` copies
+# the live file back here with the admin hash re-masked. See README.md.
 #
-# This is NOT the live file. AdGuard owns /opt/adguardhome/conf/AdGuardHome.yaml
-# and rewrites it — in full, comments stripped — every time anything changes in
-# the web UI and on every schema migration. Bind-mounting a tracked file
-# straight into the container would therefore keep the working tree permanently
-# dirty and, because the container runs as root, root-owned mode 600.
-#
-# So: `./manage.sh up` copies this into ./config/ only when ./config is empty,
-# `./manage.sh diff` reports drift, and `./manage.sh save` copies the live file
-# back here with the admin hash re-masked. git is the seed and the audit trail;
-# the pi is the running state. See README.md.
-#
-# Captured from the live file 2026-08-25 (schema_version 34, v0.107.78) with
-# four deliberate changes from what was running, all marked FIX below.
+# Captured 2026-08-25 (schema_version 34, v0.107.78); the four deliberate
+# divergences from what was then running are marked FIX.
 http:
   pprof:
     port: 6060
@@ -27,11 +19,9 @@ http:
   address: 0.0.0.0:3000
   session_ttl: 30d
 users:
-  # Masked on purpose — the real value is a bcrypt hash of the admin password
-  # and this repo is not the place for it. A rebuild starts with DNS working and
-  # the UI unloginable, which is the right way round; paste the real hash in
-  # after copying the seed, or delete the whole `users:` block to get the setup
-  # wizard back. README.md has both.
+  # Masked bcrypt hash — a rebuild gets working DNS and no UI login, which is the
+  # right way round. Paste the real hash in after seeding, or delete `users:`
+  # entirely for the setup wizard. README.md has both.
   - name: admin
     password: "$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH_SEE_README"
 auth_attempts: 5
@@ -44,11 +34,9 @@ dns:
     - 0.0.0.0
   port: 53
   anonymize_client_ip: false
-  # Over-limit queries are DROPPED, not refused: the client gets no packet at
-  # all, so CoreDNS reports `read udp ... i/o timeout`, answers SERVFAIL, and
-  # node reports `EAI_AGAIN`. There is nothing in any log that says
-  # "rate limited". Measured against 192.168.0.59 at ratelimit 20: 10 q/s → 0
-  # of 60 failed, 25 q/s → 17 of 60 failed, 60 q/s → 40 of 60 failed.
+  # Over-limit queries are DROPPED, not refused, and nothing logs "rate limited" —
+  # it surfaces as CoreDNS `i/o timeout` → SERVFAIL → node `EAI_AGAIN`. At 20:
+  # 10 q/s lost 0 of 60, 25 q/s lost 17, 60 q/s lost 40.
   ratelimit: 20
   # FIX (was 24). 24 put every device in 192.168.0.0/24 into ONE 20 qps bucket:
   # both cluster nodes, the pi itself, and every phone and TV on the LAN. A
@@ -208,11 +196,9 @@ filtering:
   blocking_mode: default
   parental_block_host: family-block.dns.adguard.com
   safebrowsing_block_host: standard-block.dns.adguard.com
-  # Load-bearing for the cluster. `local-s3.internal.example.com` (MinIO) and the
-  # rest of the internal names resolve to the pi through this rewrite. CoreDNS
-  # also has a `hosts` entry pinning local-s3 to the same address, added because
-  # this lookup used to time out intermittently — which was the rate limit
-  # above, not this rewrite.
+  # Load-bearing: every internal name, including local-s3 (MinIO), resolves to the
+  # pi through this rewrite. CoreDNS also pins local-s3 in a `hosts` entry, added
+  # when this lookup timed out intermittently — that was the rate limit above.
   rewrites:
     - domain: '*.internal.example.com'
       answer: 192.168.0.59

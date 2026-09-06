@@ -8,13 +8,10 @@ metadata:
     app.kubernetes.io/name: traefik
 spec:
   replicas: 1
-  # One replica holding an RWO longhorn volume (`traefik-data`, the ACME store), so the
-  # surge has to be zero: with maxSurge 1 / maxUnavailable 0 the replacement pod is
-  # created while the old one still holds the volume, and if the scheduler puts it on the
-  # other node it waits on a Multi-Attach error forever. The old pod keeps serving, so
-  # that failure mode is a rollout that never finishes rather than an outage — which is
-  # worse, because it is silent. Stopping first costs a few seconds of ingress downtime on
-  # every config change, which is the honest price of a single-replica ingress.
+  # maxSurge 0 because the single replica holds an RWO volume: a surged pod scheduled on
+  # the other node waits on Multi-Attach forever while the old pod keeps serving, i.e. a
+  # rollout that silently never finishes. Stopping first costs seconds of ingress downtime
+  # per config change.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -34,10 +31,9 @@ spec:
       securityContext:
         fsGroup: 65532
       initContainers:
-        # /data/logs is gone from here: the access log goes to stdout now, so nothing writes
-        # into that directory. /data/acme stays, empty and mode 700, because it is where the
-        # ACME store goes if the resolver in traefik.yaml is ever restored - and creating it
-        # after the fact means getting the ownership right by hand on a live volume.
+        # No /data/logs any more - accessLog goes to stdout. /data/acme is kept empty at
+        # mode 700 so a restored ACME resolver has somewhere to write without fixing
+        # ownership by hand on a live volume.
         - name: init-dirs
           image: alpine:3.24
           command:
@@ -57,16 +53,11 @@ spec:
           image: traefik:v3.7.13
           args:
             - --configfile=/etc/traefik/traefik.yaml
-          # No env. There used to be a CF_DNS_API_TOKEN here, read from a
-          # `cloudflare-api-token` secret, for the ACME dnsChallenge resolver that has now
-          # been removed from traefik.yaml — see the comment there for why (nothing
-          # requests a certResolver; TLS terminates at Cloudflare).
-          #
-          # That secret no longer exists in the cluster. A running pod resolves secretKeyRef
-          # once, at start, so traefik went on serving for a day after it was deleted and
-          # the first restart after that failed with CreateContainerConfigError — ingress
-          # down, for a credential that was feeding a code path with no callers. An env var
-          # nobody uses is not free: it is a landmine armed on the next restart.
+          # No env on purpose. CF_DNS_API_TOKEN used to be read from a `cloudflare-api-token`
+          # secret for the ACME resolver that traefik.yaml no longer has. The secret was
+          # deleted, traefik kept serving for a day (secretKeyRef resolves once, at start),
+          # and the next restart took ingress down with CreateContainerConfigError - for a
+          # credential with no callers.
           ports:
             - name: web
               containerPort: 80
@@ -107,18 +98,10 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
 
-        # No logrotate sidecar. There was one - a plain-shell size-capped rotator, itself a
-        # rewrite of a broken `apk add logrotate` version - and it is gone because the thing
-        # it rotated is gone: traefik's accessLog now writes to stdout, so the log is the
-        # kubelet's to rotate and Loki's to retain, and /data/logs is never created.
-        #
-        # This is worth spelling out because removing it looks like removing a safety
-        # measure. It is the opposite: a rotator watching a file that will never again be
-        # written cannot fire, so keeping it would have left the 287 MB of already-rotated
-        # access.log.* on the volume permanently, under a sidecar that reported healthy while
-        # doing nothing. Those files were deleted when this landed. If accessLog ever goes
-        # back to a filePath, this comes back with it - and stdout is the reason the traefik
-        # dashboard can query request paths and client IPs at all.
+        # No logrotate sidecar: accessLog goes to stdout, so rotation is the kubelet's job
+        # and retention is Loki's. The old rotator watched a file that is never written
+        # again, so it reported healthy while leaving 287 MB of access.log.* on the volume
+        # (since deleted). Bring it back only if accessLog goes back to a filePath.
 
       volumes:
         - name: config

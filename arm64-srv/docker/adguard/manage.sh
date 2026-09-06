@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Bring AdGuard Home up from this directory alone, on a machine that has never
-# run it. Shaped after ../monitoring/manage.sh.
-#
-# The point of `up` is that it is safe to run twice: it never overwrites a live
-# AdGuardHome.yaml, because AdGuard owns that file and the seed here is only a
-# starting point. See README.md.
+# Bring AdGuard Home up from this directory alone on a machine that has never run it,
+# shaped after ../monitoring/manage.sh. `up` is safe to run twice: AdGuard owns the live
+# AdGuardHome.yaml, so the seed here is only ever a starting point. See README.md.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -69,10 +66,8 @@ case "${1:-}" in
     ;;
 
   diff)
-    # The seed is curated by hand and carries comments explaining every setting
-    # that differs from AdGuard's defaults; AdGuard strips comments whenever it
-    # rewrites the live file, so this is deliberately not a two-way sync. Empty
-    # output means the two agree on every value that matters.
+    # One-way by design: the seed carries the comments and AdGuard strips them whenever it
+    # rewrites the live file. Empty output means the two agree on every value that matters.
     diff <(sed -E "$MASK" "$SEED") <(live_config) && echo "✅ live config matches the seed"
     ;;
 

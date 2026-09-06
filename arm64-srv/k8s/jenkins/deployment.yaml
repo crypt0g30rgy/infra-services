@@ -15,15 +15,10 @@ spec:
     spec:
       serviceAccountName: jenkins
 
-      # Runs on the amd64 box, not the pi. It used to have no choice: jenkins-home
-      # was a hostpath directory on the pi. Now that the volume is on Longhorn and
-      # reachable over iSCSI from either node, Jenkins belongs on the machine with
-      # the spare capacity - the pi had ~3670m of its 4000m CPU already requested,
-      # and Jenkins alone asks for 500m of it.
-      #
-      # Pinned rather than left to the scheduler, because "wherever it lands" is
-      # not a deployment target. jenkins/jenkins:2.578 is a multi-arch image, so
-      # amd64 is fine.
+      # The amd64 box, not the pi: jenkins-home used to be a hostpath directory there, but
+      # on Longhorn it is reachable from either node, and the pi had ~3670m of 4000m CPU
+      # requested against Jenkins' own 500m. Pinned rather than left to the scheduler,
+      # because "wherever it lands" is not a deployment target; the image is multi-arch.
       nodeSelector:
         kubernetes.io/hostname: dell-amd64-srv
 

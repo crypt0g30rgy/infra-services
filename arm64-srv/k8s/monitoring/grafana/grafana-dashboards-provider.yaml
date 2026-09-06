@@ -1,14 +1,10 @@
-# Tells Grafana where the file-provisioned dashboards are.
+# Where the file-provisioned dashboards are. The JSON lives in the grafana-dashboard-*.yaml
+# ConfigMaps, projected into /etc/grafana/dashboards - outside /var/lib/grafana on purpose,
+# so a dashboard is never half-owned by a ConfigMap and the database.
 #
-# The JSON itself is in grafana-dashboard-cluster.yaml and grafana-dashboard-app.yaml,
-# projected into /etc/grafana/dashboards - deliberately outside /var/lib/grafana, which is
-# the persistent claim, so a provisioned dashboard is never half-owned by both the
-# ConfigMap and the database.
-#
-# `allowUiUpdates: false` because these two are code: an edit made in the UI would be
-# reverted the next time Grafana reloads the directory, and silently. Use "Save as copy"
-# to build on them - copies live in the database, which now persists - or edit the
-# ConfigMap and re-apply.
+# allowUiUpdates is false because these are code: a UI edit is silently reverted on the next
+# directory reload. Use "Save as copy" (copies persist in the database) or edit the
+# ConfigMap.
 apiVersion: v1
 kind: ConfigMap
 metadata:

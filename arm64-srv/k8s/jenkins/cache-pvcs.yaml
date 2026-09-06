@@ -29,91 +29,25 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  # Longhorn, not microk8s-hostpath. A hostpath cache is a directory on the pi,
-  # which forced every CI build pod onto the pi to reach it. On Longhorn the
-  # cache follows the build pod to either node.
+  # Longhorn rather than hostpath so the cache follows the build pod instead of pinning
+  # builds to the pi. ReadWriteOnce means one *node* at a time - give the arches separate
+  # PVCs if two nodes ever need it at once.
   #
-  # This one was migrated by simply deleting and recreating the PVC - a build
-  # cache is disposable by definition, so there was nothing to copy. It also
-  # handed ~9GB back to the pi's microSD card.
-  #
-  # The write path is now iSCSI to dell instead of local microSD. Untested
-  # either way: the LAN round trip costs something, dell's SSD is far faster
-  # than a microSD card, and which wins has not been measured. If builds get
-  # slower, this is the first thing to look at.
-  #
-  # Side effect worth knowing: ../../../../tdi-ci pod-template.yaml used to select
-  # its agent node by kubernetes.io/arch, so an amd64 build landed on dell. While
-  # this cache was hostpath-on-the-pi, such a build could not mount it at all.
-  # It can now - multi-arch CI actually works. The pod template has since moved to
-  # a podAffinity on the Jenkins controller pod, partly for this very reason: the
-  # agent follows the controller, so it always lands on the node this volume was
-  # last attached to and never waits for a detach/reattach cycle.
-  #
-  # The limit that remains is that ReadWriteOnce on Longhorn means one *node* at a
-  # time, strictly enforced (hostpath never really enforced it). Two builds on the
-  # same node still share the cache fine; two on different nodes cannot, and the
-  # second one to ask will fail to attach. Give the two arches separate cache PVCs
-  # if that ever starts happening.
-  #
-  # ---------------------------------------------------------------------------
-  # XFS, via the longhorn-buildcache class above, because ext4 ran out of INODES
-  # here on 2026-08-23 with a third of its bytes still free:
-  #
-  #   df -h  ->  39.3G size, 22.6G used, 16.7G available   (57%)
-  #   df -i  ->  2621440 inodes, 2621430 used, 10 free    (100%)
-  #
-  # The build failed as
-  #
-  #   error: failed to solve: ResourceExhausted: failed to copy files: ...
-  #     ReactNativeQueryRunner.js.map: no space left on device
-  #
-  # which reads as a disk-full failure and is not one. ENOSPC is also what the
-  # kernel returns when there are no free inodes, and that is what happened:
-  # mke2fs sizes the inode table once, at format time, at one inode per 16KiB of
-  # filesystem, and a node_modules tree averages ~9KiB per file. So this volume
-  # could hold 2.6M files no matter how many gigabytes were left, and one
-  # multi-arch node build writes four dependency trees plus pnpm's store into it.
-  # Growing the volume does add inodes (resize2fs adds block groups), which is
-  # exactly why the earlier 10Gi -> 40Gi expansion made this look fixed for one
-  # build and then failed again in the same way.
-  #
-  # XFS allocates inodes on demand out of free space instead of preallocating a
-  # fixed table, so the failure mode does not exist: a fresh 40Gi volume reports
-  # ~21M inodes and that number tracks the filesystem. The default imaxpct=25
-  # caps inode space at 25% of the volume, which at 40Gi is far more than the
-  # 2.6M files that broke ext4 - pass `-i maxpct=0` via the class's mkfsParams if
-  # that ever becomes the ceiling.
-  #
-  # Changing fsType means a reformat, so the PVC was deleted and recreated rather
-  # than converted. That is free here for the same reason as the hostpath
-  # migration above: the first build afterwards refetches its dependencies (5-8
-  # minutes) and every build after that is warm again.
+  # XFS, via the class above, because ext4 exhausted its INODES on 2026-08-23 with 16.7G
+  # free (2.6M inodes fixed at format time, one per 16KiB, vs ~9KiB per node_modules file).
+  # It surfaces as `no space left on device` and expanding only defers it; XFS allocates
+  # inodes on demand. Both changes need a reformat, so this PVC was deleted and recreated -
+  # a build cache is disposable and warm again after one 5-8 minute refetch.
   storageClassName: longhorn-buildcache
   resources:
     requests:
-      # 40Gi, raised from 10Gi on 2026-08-23. What lives here is buildkitd's
-      # whole state dir, and `snapshots/` is effectively all of it (5.8Gi of
-      # 6.2Gi when first measured, 22.6G at the inode failure above). One
-      # multi-arch node build writes four dependency trees into it - deps and
-      # prod-deps, amd64 and arm64 - then the build stage copies node_modules
-      # again per arch, and the services' Dockerfiles also keep pnpm's store and
-      # metadata cache in BuildKit cache mounts, which live in the same snapshots
-      # dir and persist between builds on purpose (that is what makes
-      # `reused 406, downloaded 0` possible instead of refetching ~1000 packages
-      # every time).
+      # 40Gi, raised from 10Gi on 2026-08-23. This is buildkitd's whole state dir and
+      # `snapshots/` is nearly all of it: one multi-arch node build writes four
+      # dependency trees plus pnpm's store, which is what keeps builds warm. Its GC
+      # works (usage falls back to ~6Gi), so this is peak headroom, not growth.
       #
-      # buildkitd's GC does work - usage fell back to 6.2Gi on its own after an
-      # earlier failure - so size here is a headroom problem at peak, not
-      # unbounded growth. dell's Longhorn disk had 412Gi available with 55Gi
-      # scheduled when this was raised, so 40Gi is cheap.
-      #
-      # Expansion is safe to do live and does not lose the cache: `kubectl -n
-      # jenkins patch pvc buildkit-cache-pvc -p '{"spec":{"resources":{"requests":
-      # {"storage":"40Gi"}}}}'`. Longhorn attaches the volume briefly, resizes the
-      # filesystem, and detaches again - measured going from 9.7G/2.3G-used to
-      # 39.3G with the same 6.2Gi of cache still there. Do it while no build is
-      # running, so the attach is Longhorn's and not a fight with an agent pod.
+      # Expanding is live-safe and keeps the cache - patch the claim and Longhorn
+      # attaches, resizes and detaches. Do it while no build is running.
       storage: 40Gi
 
 # --- # for sanity... build a multi arch jenkins ci builder

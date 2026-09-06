@@ -1,19 +1,6 @@
-# -----------------------------------------------------------------------------
-# ReplicaSet & Completed Pod Cleanup
-#
-# This CronJob keeps the cluster tidy by:
-#
-# 1. Removing old ReplicaSets that:
-#    - Have 0 desired replicas.
-#    - Are older than 3 days.
-#
-# 2. Removing completed (Succeeded) pods older than 3 days.
-#    This is particularly useful on MicroK8s where helper pods (such as the
-#    hostpath provisioner) are intentionally left behind after completing.
-#
-# The 3-day retention period preserves rollback history while preventing
-# hundreds of obsolete resources from accumulating.
-# -----------------------------------------------------------------------------
+# Nightly cleanup: ReplicaSets scaled to 0 and Succeeded pods, both older than 3 days.
+# MicroK8s leaves completed helper pods (hostpath provisioner and friends) behind by
+# design, and 3 days keeps enough Deployment rollback history to be useful.
 
 apiVersion: v1
 kind: ServiceAccount
@@ -92,18 +79,11 @@ spec:
                 - /bin/sh
                 - -ec
                 - |
-                  ################################################################
-                  # Anything older than this timestamp is eligible for cleanup.
-                  ################################################################
+                  # Anything older than this is eligible.
                   cutoff=$(date -u -d "3 days ago" +%s)
 
-                  ################################################################
-                  # Cleanup old ReplicaSets.
-                  #
-                  # Only delete ReplicaSets with zero desired replicas.
-                  # These are no longer serving traffic and exist only for
-                  # Deployment rollback history.
-                  ################################################################
+                  # Zero-replica ReplicaSets only: they serve no traffic and exist
+                  # purely as rollback history.
                   echo "=== Cleaning old ReplicaSets ==="
 
                   kubectl get rs -A \
@@ -121,13 +101,7 @@ spec:
                       fi
                     done
 
-                  ################################################################
-                  # Cleanup completed Pods.
-                  #
-                  # This removes orphaned helper pods left behind by MicroK8s
-                  # (hostpath provisioner, etc.) and any other completed pods
-                  # that no longer serve a purpose.
-                  ################################################################
+                  # Succeeded pods: MicroK8s helper pods and anything else finished.
                   echo "=== Cleaning completed Pods ==="
 
                   kubectl get pods -A \
