@@ -11,11 +11,12 @@ name should not have had to. See [`../Infra.md`](../Infra.md) for current specs.
 | | |
 |---|---|
 | `docker/` | compose stacks that run directly on this host |
-| `k8s/` | manifests for workloads intended to run on this node specifically |
+| `k8s/` | manifests for workloads pinned to this node |
 
-Same layout as the arm64 tree, deliberately. Cluster-wide Kubernetes manifests
-live under `../arm64-srv/k8s/`, because that is the node with API access; only
-amd64-specific workloads belong in `k8s/` here.
+Same layout as the arm64 tree, deliberately. A manifest lives in the tree of the
+node its `nodeSelector` names, so anything pinned to `dell-amd64-srv` is here;
+cluster-wide and pi-pinned manifests stay under `../arm64-srv/k8s/`. `kubectl`
+still runs from the pi either way — that is where the API server is.
 
 ## What is actually running here
 
@@ -23,8 +24,11 @@ Verified 2026-09-05 against `docker ps` on the host and `kubectl get all -A`.
 
 | Path | State |
 |---|---|
-| `docker/bugsnik` | running — error tracking (`bugsink`), one instance per node; this is the amd64 one, the arm64 one is `../arm64-srv/docker/bugsnik`. **Its database is in the container layer — read the README before the next `up`.** |
+| `docker/bugsnik` | running — error tracking (`bugsink`), one compose instance per node; this is the amd64 one, the arm64 one is `../arm64-srv/docker/bugsnik`. **Its database is in the container layer — read the README before the next `up`.** |
 | `docker/ollama` | not deployed — written for the previous amd64 box and its GTX 1050 Ti |
+| `k8s/bugsnik` | running since 2026-09-06 — the in-cluster bugsink: the web pod in `monitoring` on this node, its PostgreSQL in `data` on the pi with the cluster's other databases, nightly dump. The hostname in the manifests is a placeholder; the credentials are created on the host |
+| `k8s/jenkins` | deployed — `jenkins/jenkins`, pinned here since before the 2026-09-06 pass; its build agents follow it (pod template in `meet-to-meat-services/back-end/tdi-ci`) and are what fills this node's memory budget |
+| `k8s/monitoring/grafana` | deployed — moved here 2026-09-06; the rest of `monitoring` is in `../arm64-srv/k8s/monitoring/` |
 | `k8s/ollama` | not deployed — there is no `ai` namespace in the cluster |
 
 Most of what runs on this host is *not* in this repo: the

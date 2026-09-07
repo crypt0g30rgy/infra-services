@@ -182,6 +182,47 @@ kubectl run dnscheck --rm -it --restart=Never --image=busybox:1.37 \
   -- nslookup registry.internal.example.com
 ```
 
+### Node placement: which workload belongs on which node
+
+The pi keeps everything the cluster cannot lose when dell (Wi-Fi, and it OOMed once —
+[`incidents/2026-09-05-node-hardening.md`](incidents/2026-09-05-node-hardening.md)) goes
+away; dell takes what can be missing for an afternoon. Expressed with
+`nodeSelector: kubernetes.io/hostname: <node>`, never `kubernetes.io/arch`. As of 2026-09-06:
+
+| | pi-5-16gb-srv-0 (arm64) | dell-amd64-srv (amd64) |
+|---|---|---|
+| **Databases** | all of them, `data` included | the ones still awaiting a dump/restore |
+| **Critical namespaces** | `apps`, `mtaa`, `xboy`, `ingress`, `vaultwarden` | — |
+| **Infrastructure and CI** | — | argocd, jenkins + agents, keda, external-secrets |
+| **Monitoring** | prometheus, jaeger, otel-collector | grafana, bugsink web |
+
+Manifests live in the tree of the node they are pinned to: `amd64-srv/k8s/` for dell,
+`arm64-srv/k8s/` for the pi and for anything unpinned or cluster-wide.
+
+- Allocatable is **6500m / 7676Mi** on dell (minus a 6Gi system + 1Gi kube reservation) and
+  **3600m / 9648Mi** on the pi. dell hits its *memory-request* wall first — Jenkins agents
+  ask 1792Mi each, so a few builds mean `FailedScheduling ... Insufficient memory`; the pi
+  hits *CPU* first, ~95% of four cores at its busiest. Memory-hungry and stateless → dell.
+- Levers on that wall, cheapest first: cap concurrent builds; lower the 6Gi reservation;
+  move the remaining databases to the pi (trades dell's memory for the pi's CPU).
+- **Storage is the pi's other wall**: its Longhorn disk reserves 60Gi of 114.7Gi, so the
+  scheduling budget is 54.7Gi and ~54Gi is committed. A new volume there gets
+  `ReplicaSchedulingFailure: insufficient storage` and runs degraded with its only replica on
+  dell — silently reintroducing the dependency the placement is meant to remove. Check
+  `kubectl -n longhorn-system get volumes.longhorn.io` for `robustness` after every move.
+- A Longhorn RWO volume is not a reason to stay — it reattaches on the other node in
+  seconds (grafana, SQLite, ~45 s), but keep `maxSurge: 0` or two pods race the attach. A
+  PostgreSQL data directory *is*: crossing architectures is a `pg_dumpall` and a restore,
+  which is why `postgres-mtaa` and `postgres-{root,xboy,foodiehub}` are still on dell.
+  `vaultwarden/postgres` took that path on 2026-09-06 and is on the pi
+  ([`maintenance/2026-09-06-vaultwarden-to-pi.md`](maintenance/2026-09-06-vaultwarden-to-pi.md));
+  it was the only critical service left on dell.
+- Not changeable from this repo: keda's `nodeSelector` (ArgoCD `k8s-infra`, selfHeal reverts
+  patches), external-secrets' (Helm — needs `--set
+  nodeSelector."kubernetes\.io/hostname"=dell-amd64-srv`), and the Jenkins *agent* pod
+  template (`meet-to-meat-services/back-end/tdi-ci`; `kubernetes.io/arch: amd64` plus a
+  podAffinity to the controller, so agents follow it and cannot land on the pi).
+
 ## 4. Check Cluster Status
 
 ```bash

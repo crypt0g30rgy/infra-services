@@ -1,0 +1,106 @@
+# Nightly pg_dumpall to the MinIO on the pi, like every other database here. Mounts `data`'s
+# existing db-backup-env / db-backup-scripts / s3-db-backup-creds (ArgoCD-owned, in
+# xboy-k8s-infra) instead of a fourth copy - the reason this lives in `data`. Restore steps
+# and retention are in that script; the dump is not --clean, so restore into an empty server.
+#   kubectl -n data create job --from=cronjob/db-backup-postgres-bugsink backup-now
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup-postgres-bugsink
+  namespace: data
+  labels:
+    app.kubernetes.io/name: db-backup
+    app.kubernetes.io/instance: postgres-bugsink
+    app.kubernetes.io/component: postgres
+spec:
+  # 04:15 UTC: after the six existing dumps (01:15-03:45), so no two share the pi's CPU.
+  schedule: "15 4 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 2400
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            # Selected by db-backup-egress here and by two rules in
+            # bugsink-networkpolicy.yaml; renaming breaks the backup, not the app.
+            app.kubernetes.io/name: db-backup
+            app.kubernetes.io/instance: postgres-bugsink
+            app.kubernetes.io/component: postgres
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # The pi: both the server it dumps and the MinIO it uploads to are there, so the
+          # dump never crosses the Wi-Fi link.
+          nodeSelector:
+            kubernetes.io/hostname: pi-5-16gb-srv-0
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: backup
+            # Pinned by multi-arch *index* digest - a per-platform digest is unpullable on
+            # one of the two nodes. Ships pg_dumpall 18.6, so postgres here must stay <= 18.
+            image: registry.internal.example.com/tools/s3-backup:2.0.0@sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e
+            imagePullPolicy: IfNotPresent
+            command: ["/bin/sh", "/scripts/backup.sh"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            envFrom:
+            - configMapRef:
+                name: db-backup-env
+            - secretRef:
+                name: s3-db-backup-creds
+            env:
+            # NAMESPACE and APP are the object path.
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: APP
+              value: postgres-bugsink
+            - name: PGHOST
+              value: postgres-bugsink
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-bugsink-secret
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-bugsink-secret
+                  key: POSTGRES_PASSWORD
+            resources:
+              requests:
+                cpu: 100m
+                memory: 192Mi
+              limits:
+                cpu: "1"
+                memory: 640Mi
+            volumeMounts:
+            - name: work
+              mountPath: /tmp
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          volumes:
+          # HOME, the AWS config, the dump; capped so a runaway dump is evicted, not the node.
+          - name: work
+            emptyDir:
+              sizeLimit: 4Gi
+          - name: scripts
+            configMap:
+              name: db-backup-scripts
+              defaultMode: 0555

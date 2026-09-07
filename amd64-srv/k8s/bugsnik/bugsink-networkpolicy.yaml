@@ -1,0 +1,188 @@
+# Deny bugsink's egress except DNS + its database; allow ingress from ingress/xboy/apps/mtaa.
+# The instance spans two namespaces, so each hop needs a rule on both sides, with the
+# namespaceSelector and podSelector in ONE list item. Nothing here uses podSelector: {} -
+# `monitoring` is shared with prometheus/loki/jaeger/otel; `data` already denies by default.
+# Kubelet probes bypass Calico workload policy, so the deny does not block readiness.
+#
+# NOT here, because ArgoCD (xboy-k8s-infra, selfHeal) would revert it: `apps` allows egress
+# to this namespace on 4317/4318 only, so an `apps` sender is dropped on the way out. Add
+# next to apps-egress-monitoring there:
+#   - ports: [{port: 8000, protocol: TCP}]
+#     to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+# mtaa/ingress/xboy need nothing. Objects applied here are untracked by ArgoCD (it tracks by
+# annotation), so they survive syncs - which is why the `data` rules below are additive
+# policies rather than edits to db-backup-egress / data-allow-ingress-from-db-backup.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bugsink-default-deny
+  namespace: monitoring
+  labels:
+    app: bugsink
+spec:
+  podSelector:
+    matchLabels:
+      app: bugsink
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Whole namespaces, as elsewhere in this cluster: the DSN key decides the project.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bugsink-allow-ingress
+  namespace: monitoring
+  labels:
+    app: bugsink
+spec:
+  podSelector:
+    matchLabels:
+      app: bugsink
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # traefik, for the UI; the tunnel hop is cloudflared -> traefik-external -> here.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: xboy
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: apps
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mtaa
+        # Uncomment per namespace as something in it gets a DSN: default, jenkins,
+        # transport, utils.
+      ports:
+        - port: 8000
+          protocol: TCP
+
+---
+# DNS, without which postgres-bugsink.data.svc.cluster.local does not resolve. Still denied:
+# bugsink.com (PHONEHOME off for that reason), SMTP (mail goes to the log; a relay needs an
+# ipBlock rule), outbound webhooks, and anything fetched from the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bugsink-allow-dns
+  namespace: monitoring
+  labels:
+    app: bugsink
+spec:
+  podSelector:
+    matchLabels:
+      app: bugsink
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+---
+# Pairs with postgres-bugsink-allow-ingress below; missing either is a hang at boot.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bugsink-egress-postgres
+  namespace: monitoring
+  labels:
+    app: bugsink
+spec:
+  podSelector:
+    matchLabels:
+      app: bugsink
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: data
+          podSelector:
+            matchLabels:
+              app: postgres-bugsink
+      ports:
+        - port: 5432
+          protocol: TCP
+
+---
+# The database: reachable from bugsink and the nightly dump, nothing else. No deny of its
+# own - data-default-deny covers it, and PostgreSQL needs no egress here.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-bugsink-allow-ingress
+  namespace: data
+  labels:
+    app: postgres-bugsink
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres-bugsink
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: bugsink
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: db-backup
+      ports:
+        - port: 5432
+          protocol: TCP
+
+---
+# `db-backup-egress` allows the backup pod 5432 only to the other two servers, so this adds
+# the third. DNS and 443 (MinIO on the pi, a LAN address - hence no `to`) repeated so the
+# job's destinations are in one place.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-backup-bugsink-egress
+  namespace: data
+  labels:
+    app.kubernetes.io/name: db-backup
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: db-backup
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres-bugsink
+      ports:
+        - port: 5432
+          protocol: TCP
+    - ports:
+        - port: 443
+          protocol: TCP

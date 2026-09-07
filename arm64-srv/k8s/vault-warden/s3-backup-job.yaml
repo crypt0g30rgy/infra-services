@@ -175,6 +175,10 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # Must follow the vaultwarden pod: it mounts the same RWO claim, so a run on the
+          # other node cannot attach the volume.
+          nodeSelector:
+            kubernetes.io/hostname: pi-5-16gb-srv-0
           containers:
           - name: backup
             # Shared backup image, pinned by multi-arch *index* digest - a per-platform

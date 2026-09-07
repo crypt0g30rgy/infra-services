@@ -14,11 +14,11 @@ spec:
       labels:
         app: postgres
     spec:
-      # Pinned to dell, where the Longhorn replica is and where vaultwarden runs.
-      # Moving a data directory between architectures is unsupported - if this ever
-      # moves arch again, dump and restore rather than reattaching the volume.
+      # The pi with vaultwarden (2026-09-06, was dell). Moving a data directory between
+      # architectures is unsupported, so that move was a dump and a restore into a fresh
+      # volume: ../../../maintenance/2026-09-06-vaultwarden-to-pi.md.
       nodeSelector:
-        kubernetes.io/hostname: dell-amd64-srv
+        kubernetes.io/hostname: pi-5-16gb-srv-0
 
       containers:
         - name: postgres

@@ -3,12 +3,15 @@
 `bugsink/bugsink:2.5.1` behind traefik, SQLite on the `./data` bind mount, one
 container running both gunicorn and the snappea background worker.
 
-**One instance per node.** This is the arm64 one, and this README is the shared
-reference for both. The amd64 instance is
+**One compose instance per node.** This is the arm64 one, and this README is the
+shared reference for all of them. The amd64 instance is
 [`../../../amd64-srv/docker/bugsnik/`](../../../amd64-srv/docker/bugsnik/README.md);
 it has no traefik in front of it, so its compose file differs and its README
-lists only what differs. The two are fully independent — separate databases,
-separate projects, separate DSNs.
+lists only what differs. There is a third, in the cluster rather than in docker:
+[`../../../amd64-srv/k8s/bugsnik/`](../../../amd64-srv/k8s/bugsnik/README.md) —
+PostgreSQL rather than SQLite, so that it gets the same nightly dump as every
+other database in the cluster. All three are fully independent — separate
+databases, separate projects, separate DSNs.
 
 It speaks the **Sentry** ingest protocol, so any Sentry SDK reports to it with
 nothing but a DSN change. It is **not** an OTLP endpoint — see

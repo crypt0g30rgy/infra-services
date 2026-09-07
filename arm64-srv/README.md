@@ -11,12 +11,13 @@ current specs.
 | | |
 |---|---|
 | `docker/` | compose stacks that run directly on this host, from `~/<stack>/` |
-| `k8s/` | manifests applied to the cluster from this node (it holds the API server) |
+| `k8s/` | cluster-wide manifests, and those pinned to this node |
 
-`k8s/` lives here rather than in a shared directory because this is the node with
-cluster access; the manifests themselves are cluster-wide unless they carry a
-`nodeSelector`. Workloads pinned to a specific node do say so — see
-`k8s/jenkins/deployment.yaml`, `k8s/vault-warden/*`, `k8s/rancher/rancher.yaml`.
+`kubectl` runs from here because this is the node with the API server, but a
+manifest lives in the tree of the node its `nodeSelector` names: jenkins,
+vault-warden and grafana are under
+[`../amd64-srv/k8s/`](../amd64-srv/k8s/) for that reason. Placement policy is in
+[`../k8s.md`](../k8s.md), "Node placement".
 
 ## What is actually running here
 
@@ -37,7 +38,7 @@ Anything marked *not deployed* also carries a header comment in its own files.
 | `docker/drone-ci` | not deployed — CI is Jenkins in Kubernetes |
 | `docker/gitea` | not deployed |
 | `docker/homepage` | not deployed |
-| `docker/jenkins` | not deployed — runs in `k8s/jenkins` |
+| `docker/jenkins` | not deployed — runs in `../amd64-srv/k8s/jenkins` |
 | `docker/local-cloud` | not deployed |
 | `docker/mobsf` | not deployed |
 | `docker/monitoring` | not deployed — the live stack is `k8s/monitoring`, but keep this until Prometheus there is fixed |
@@ -55,10 +56,9 @@ builder. They are deployed from elsewhere or by hand.
 | Path | State |
 |---|---|
 | `k8s/ingress` | deployed — traefik + cloudflared in the `ingress` namespace |
-| `k8s/jenkins` | deployed — `jenkins/jenkins` |
+| `k8s/vault-warden` | deployed — vaultwarden + postgres + nightly `vaultwarden-backup`, all three pinned here since 2026-09-06 ([`../maintenance/2026-09-06-vaultwarden-to-pi.md`](../maintenance/2026-09-06-vaultwarden-to-pi.md)) |
 | `k8s/longhorn` | deployed — `longhorn-system`, v1.12.1, the cluster's storage |
-| `k8s/monitoring` | deployed — grafana, loki, prometheus (prometheus is 0/1, PVC full) |
-| `k8s/vault-warden` | deployed — vaultwarden + postgres + nightly `vaultwarden-backup` |
+| `k8s/monitoring` | deployed — loki, promtail; grafana moved to `../amd64-srv/k8s/monitoring/grafana` with the pod |
 | `k8s/replicasets-cleaner` | deployed — `rs-cleaner` CronJob in `kube-system` |
 | `k8s/cluster-role.yaml`, `k8s/cluster-role-binding.yaml` | loose RBAC, applied by hand |
 | `k8s/drone-ci` | not deployed — no drone namespace |
