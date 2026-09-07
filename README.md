@@ -55,9 +55,10 @@ change, and reading the diff for a hostname you did not mean to touch.
 
 So: **apply the files you changed, never the directory, unless you have checked it holds no
 Ingress.** `kubectl diff -f <dir>/` catches the other direction too, since a tag bumped in
-git may never have been applied (loki was two patch releases behind its own manifest for a
-week; grafana still is a minor behind, deliberately left for a human because a Grafana minor
-migrates its SQLite database and does not migrate back).
+git may never have been applied — loki ran two patch releases behind its own manifest for a
+week, and grafana sat a minor behind for the same reason until it was upgraded deliberately
+on 2026-09-07 (see
+[`maintenance/2026-09-07-grafana-13.1-to-13.2.md`](./maintenance/2026-09-07-grafana-13.1-to-13.2.md)).
 
 The vaultwarden ingress is worse than a rewrite: the live object is named
 `password-manager` and the file declares `ingress`, so applying it adds a *second* Ingress
