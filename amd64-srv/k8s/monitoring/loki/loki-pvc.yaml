@@ -1,0 +1,35 @@
+# /loki is everything Loki has: WAL, TSDB index, chunks, compactor workdir, ruler state.
+# Before this claim it all sat on the container's writable layer, so 54 pod restarts each
+# silently discarded every log line - promtail keeps pushing and Grafana just shows an empty
+# range.
+#
+# 5Gi is deliberate headroom: ~20 MB/day compressed means the 30-day retention in
+# loki-configmap.yaml needs well under 1Gi. The class is Retain - deleting the PVC leaves
+# the data for a human.
+#
+# ONE REPLICA, ON dell - and you cannot see that from here. Longhorn's per-volume settings
+# live on the `volumes.longhorn.io` object, not on the claim, so this file cannot express
+# them and a re-apply cannot restore them. As of 2026-09-07 the volume behind this claim is
+# `numberOfReplicas: 1`, `nodeSelector: ["amd64"]` (a Longhorn *node tag* on
+# `dell-amd64-srv`, not a Kubernetes label), `dataLocality: best-effort`:
+#
+#   kubectl -n longhorn-system get volumes.longhorn.io \
+#     -o custom-columns='NAME:.metadata.name,PVC:.status.kubernetesStatus.pvcName,REPLICAS:.spec.numberOfReplicas,NODES:.spec.nodeSelector,STATE:.status.robustness'
+#
+# It was two replicas until then, which the pi could no longer schedule - its Longhorn disk
+# has ~0.7Gi of its 54.7Gi budget left, so the second replica sat in
+# `ReplicaSchedulingFailure` and the volume reported `degraded` indefinitely. One replica of
+# 30-day-retention logs is an acceptable trade; do not copy the setting onto a database
+# volume. loki-deployment.yaml pins the pod to the same node - move one and you move both.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-data
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
