@@ -5,7 +5,7 @@ jaeger and the otel collector from `k8s-infra/infrastructure/base/monitoring`). 
 whole directory after an edit:
 
 ```bash
-kubectl apply -f arm64-srv/k8s/monitoring/grafana/
+kubectl apply -f amd64-srv/k8s/monitoring/grafana/
 ```
 
 ## Files

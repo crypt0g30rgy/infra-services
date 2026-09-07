@@ -38,6 +38,10 @@ spec:
   # It surfaces as `no space left on device` and expanding only defers it; XFS allocates
   # inodes on demand. Both changes need a reformat, so this PVC was deleted and recreated -
   # a build cache is disposable and warm again after one 5-8 minute refetch.
+  #
+  # Whoever mounts this wants `fsGroupChangePolicy: OnRootMismatch`; the agent pod template
+  # (in `meet-to-meat-services/back-end/tdi-ci`) omits it, so the kubelet re-chowns the whole
+  # cache on every agent start - 1910545 files and minutes of ContainerCreating on 2026-09-06.
   storageClassName: longhorn-buildcache
   resources:
     requests:

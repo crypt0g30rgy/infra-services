@@ -8,7 +8,7 @@ spec:
     - ReadWriteOnce
   # Migrated off microk8s-hostpath by copy-and-verify rather than recreated, since Jenkins'
   # home holds job config, plugins and build history - unlike the disposable cache in
-  # cache-pvcs.yaml. Procedure in ../longhorn/README.md.
+  # cache-pvcs.yaml. Procedure in ../../../arm64-srv/k8s/longhorn/README.md.
   #
   # No volumeName here, so applying this against a deleted PVC provisions a fresh EMPTY
   # volume while the old data sits in a Released PV rather than a directory you would spot.
