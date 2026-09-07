@@ -206,7 +206,7 @@ scheduler is free to put the pod back where it came from. As of 2026-09-07:
 |---|---|---|
 | **Databases** | all of them, `data` included | the ones still awaiting a dump/restore |
 | **Critical namespaces** | `apps`, `mtaa`, `xboy`, `ingress`, `vaultwarden` | — |
-| **Infrastructure and CI** | — | argocd, jenkins + agents, keda, external-secrets |
+| **Infrastructure and CI** | keda | argocd, jenkins + agents, external-secrets |
 | **Monitoring** | `promtail` only (DaemonSet — it has to be on both) | **all of it**: prometheus, jaeger, otel-collector, grafana, loki, bugsink web |
 
 Manifests live in the tree of the node they are pinned to: `amd64-srv/k8s/` for the amd64 node,
@@ -249,7 +249,10 @@ single-replica.
   [`maintenance/2026-09-06-vaultwarden-to-pi.md`](maintenance/2026-09-06-vaultwarden-to-pi.md)).
   Those pins live in the app repos (`mtaa`, `xboy-k8s-infra`), not here.
 - Not changeable from this repo: keda's `nodeSelector` (ArgoCD `k8s-infra`, selfHeal reverts
-  patches), argocd's and external-secrets' (live `kubectl patch` on their Deployments — the
+  patches — it is on the pi because `components/pin-to-pi-node` covers it and
+  `components/monitoring-on-amd64` deliberately does not; a `kubectl patch` moving it to the
+  amd64 node held for a day in September 2026 and was drift, not configuration),
+  argocd's and external-secrets' (live `kubectl patch` on their Deployments — the
   external-secrets Helm release has no user-supplied values, so nothing to `--set`), and the
   Jenkins *agent* pod
   template (`meet-to-meat-services/back-end/tdi-ci`; `kubernetes.io/arch: amd64` plus a

@@ -121,6 +121,34 @@ requests, so several pods were briefly `Pending` on `Insufficient memory` while 
 ones released their requests. It settled without intervention in about five minutes, but it is
 a restart wave, not a no-op — do it deliberately, not at the end of a long day.
 
+## Calico was autodetecting its address by pinging the node being removed
+
+The one thing that would have broken the cluster *after* the old box was already gone, found
+by sweeping for its address rather than its name:
+
+```
+IP_AUTODETECTION_METHOD = can-reach=192.168.0.60
+```
+
+That is how every `calico-node` picks the address it advertises for its own node. It is
+evaluated **at calico-node startup**, so nothing breaks while the pods keep running — the
+cluster looks fine right up until a pod restart, a kubelet restart or a reboot, at which point
+the surviving node cannot autodetect an address and its networking does not come up. A
+node-removal checklist that only greps for the *hostname* misses it completely.
+
+Changed to `kubernetes-internal-ip` (Calico ≥ v3.21; this cluster is v3.28.1), which takes the
+address straight off the Node object's `InternalIP` and so names no machine at all:
+
+```bash
+kubectl -n kube-system set env ds/calico-node IP_AUTODETECTION_METHOD=kubernetes-internal-ip
+```
+
+**Also edit `/var/snap/microk8s/current/args/cni-network/cni.yaml` on the control plane**
+(backup: `cni.yaml.bak-before-node-removal-20260907`) — MicroK8s re-applies that file on
+start, so a live-only patch is reverted by the next `microk8s stop/start`. Both nodes kept the
+same `projectcalico.org/IPv4Address` and VXLAN tunnel address across the rolling restart, and
+cross-node pod traffic was unaffected.
+
 ## Three things that bit, worth knowing before the next move
 
 **A replica being evicted holds the volume attached to the old node.** The eviction
@@ -167,7 +195,11 @@ The old box also ran things Kubernetes never knew about, and they died with it:
 - the `meet-to-meat-services` dependency stack — `postgres-svc` (:5432), `postgres-ai-svc`
   (:5433), `redis-svc` (:6379), `rabbitmq-svc` (:5672/:15672), `otel-collector`
   (:4317/:4318), `jaeger` (:16686) and `prometheus` (:9095), ~2.7 GB of Docker volumes.
-- `/home/agent/webdev` — 38 G of working copies, served to the coding sandbox over virtiofs.
+- `/home/agent/webdev` — 5.7 G of working copies, served to the coding sandbox over virtiofs.
+  Everything relevant is pushed; `bb-tool-api`'s three trees had uncommitted changes.
+- a 14.17 GB Docker build cache and two dev database volumes (`db_postgres_data_mm` 143.7 MB,
+  `db_postgres_ai_data_mm` 80.52 MB). The cache is disposable; the two volumes are the compose
+  copies of what `data` already runs in-cluster.
 
 The OptiPlex has no Docker installed, deliberately: the compose stacks were the old box's
 job and the in-cluster `data` namespace already carries the versions that matter.
