@@ -23,6 +23,26 @@ it. Each node directory has a `README.md` listing what is deployed there and wha
 is only kept for reference — anything not deployed also says so in its own files,
 so a stale manifest cannot be mistaken for a live one.
 
+## Hostnames here are placeholders, so `apply -f <dir>/` is not safe
+
+Every Ingress in this repo carries an `*.example.com` host, because this repo is public and
+the real names are not in it. The live values are the `.xboy.me` (and `tdi.solutions`,
+`arifa.dev`) names in `kubectl get ingress -A`. That makes a directory-wide apply a
+foot-gun: `kubectl apply -f amd64-srv/k8s/monitoring/grafana/` rewrites the live host to
+`grafana.example.com` and takes Grafana off the internet, with a healthy pod and a green
+Ingress object the whole time.
+
+So: **apply the files you changed, never the directory, unless you have checked it holds no
+Ingress.** `kubectl diff -f <dir>/` before every apply is the habit that catches this — and
+it catches the other direction too, since a tag bumped in git may never have been applied
+(loki was two patch releases behind its own manifest for a week; grafana still is a minor
+behind, deliberately left for a human because a Grafana minor migrates its SQLite database
+and does not migrate back).
+
+The vaultwarden ingress is worse than a rewrite: the live object is named
+`password-manager` and the file declares `ingress`, so applying it adds a *second* Ingress
+rather than replacing the first.
+
 ## Keeping images current
 
 [`scripts/check-image-updates.py`](./scripts/README.md) reports which container
