@@ -28,7 +28,8 @@ Verified 2026-09-05 against `docker ps` on the host and `kubectl get all -A`.
 | `docker/ollama` | not deployed — written for the previous amd64 box and its GTX 1050 Ti |
 | `k8s/bugsnik` | running since 2026-09-06 — the in-cluster bugsink: the web pod in `monitoring` on this node, its PostgreSQL in `data` on the pi with the cluster's other databases, nightly dump. The hostname in the manifests is a placeholder; the credentials are created on the host |
 | `k8s/jenkins` | deployed — `jenkins/jenkins`, pinned here since before the 2026-09-06 pass; its build agents follow it (pod template in `meet-to-meat-services/back-end/tdi-ci`) and are what fills this node's memory budget |
-| `k8s/monitoring/grafana` | deployed — moved here 2026-09-06; the rest of `monitoring` is in `../arm64-srv/k8s/monitoring/` |
+| `k8s/monitoring/grafana` | deployed — moved here 2026-09-06 |
+| `k8s/monitoring/loki` | deployed — moved here 2026-09-07, following its Longhorn volume. `promtail` and the namespace stay in `../arm64-srv/k8s/monitoring/`, which is also where the namespace overview README lives |
 | `k8s/ollama` | not deployed — there is no `ai` namespace in the cluster |
 
 Most of what runs on this host is *not* in this repo: the

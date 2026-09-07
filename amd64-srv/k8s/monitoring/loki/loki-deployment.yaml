@@ -28,6 +28,15 @@ spec:
         # ConfigMap is a change that appears to have landed and has not.
         checksum/config: "loki-config-v1-retention-720h"
     spec:
+      # dell, with grafana and the rest of `monitoring`; see ../../../../k8s.md, "Node
+      # placement". This was unpinned until 2026-09-07, which is not the same as "on the pi":
+      # the pod landed wherever the scheduler put it, and `loki-data`'s only Longhorn replica
+      # is now tagged to this node, so an unpinned pod that started on the pi would read and
+      # write every chunk over the LAN. Keep this selector and the volume's `nodeSelector`
+      # tag in step — loki-pvc.yaml says where the volume side of it lives.
+      nodeSelector:
+        kubernetes.io/hostname: dell-amd64-srv
+
       # The image runs as uid 10001 and the longhorn volume comes up owned by root, so
       # without fsGroup loki cannot create /loki/wal and crash-loops on
       # "mkdir /loki/wal: permission denied".
@@ -75,8 +84,10 @@ spec:
             port: http
           initialDelaySeconds: 60
           periodSeconds: 30
-          # WAL replay after an unclean stop can take a while on the pi's SD card, and a
-          # liveness probe that kills loki mid-replay never lets it finish.
+          # WAL replay after an unclean stop can take a while on a Longhorn volume, and a
+          # liveness probe that kills loki mid-replay never lets it finish. The 6 was chosen
+          # while this ran on the pi's SD card; it is headroom now rather than a necessity,
+          # and it costs nothing.
           failureThreshold: 6
         volumeMounts:
         - name: config

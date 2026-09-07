@@ -187,17 +187,27 @@ kubectl run dnscheck --rm -it --restart=Never --image=busybox:1.37 \
 The pi keeps everything the cluster cannot lose when dell (Wi-Fi, and it OOMed once —
 [`incidents/2026-09-05-node-hardening.md`](incidents/2026-09-05-node-hardening.md)) goes
 away; dell takes what can be missing for an afternoon. Expressed with
-`nodeSelector: kubernetes.io/hostname: <node>`, never `kubernetes.io/arch`. As of 2026-09-06:
+`nodeSelector: kubernetes.io/hostname: <node>`, never `kubernetes.io/arch`. As of 2026-09-07:
 
 | | pi-5-16gb-srv-0 (arm64) | dell-amd64-srv (amd64) |
 |---|---|---|
 | **Databases** | all of them, `data` included | the ones still awaiting a dump/restore |
 | **Critical namespaces** | `apps`, `mtaa`, `xboy`, `ingress`, `vaultwarden` | — |
 | **Infrastructure and CI** | — | argocd, jenkins + agents, keda, external-secrets |
-| **Monitoring** | prometheus, jaeger, otel-collector | grafana, bugsink web |
+| **Monitoring** | `promtail` only (DaemonSet — it has to be on both) | **all of it**: prometheus, jaeger, otel-collector, grafana, loki, bugsink web |
 
 Manifests live in the tree of the node they are pinned to: `amd64-srv/k8s/` for dell,
 `arm64-srv/k8s/` for the pi and for anything unpinned or cluster-wide.
+
+The monitoring row moved on 2026-09-07 and it moved because of storage, not CPU: with the pi
+unable to schedule a second Longhorn replica (see the storage bullet below), every monitoring
+volume ended up single-replica on dell, and a pod on the pi with its only replica on dell
+does every read and write over the LAN. So the pods followed the data. Half of that change
+is in `k8s-infra` (`components/monitoring-on-amd64`, which moves the three ArgoCD-owned
+Deployments), half is here (`nodeSelector` on grafana and loki), and the volume side is in
+neither — it is live state on the `volumes.longhorn.io` objects. Losing dell now loses the
+telemetry; that is the accepted trade, and it is why nothing holding user data is
+single-replica.
 
 - Allocatable is **6500m / 7676Mi** on dell (minus a 6Gi system + 1Gi kube reservation) and
   **3600m / 9648Mi** on the pi. dell hits its *memory-request* wall first — Jenkins agents
@@ -210,6 +220,10 @@ Manifests live in the tree of the node they are pinned to: `amd64-srv/k8s/` for 
   `ReplicaSchedulingFailure: insufficient storage` and runs degraded with its only replica on
   dell — silently reintroducing the dependency the placement is meant to remove. Check
   `kubectl -n longhorn-system get volumes.longhorn.io` for `robustness` after every move.
+  This is what moved all of `monitoring` to dell: `grafana-data`, `loki-data` and
+  `prometheus-data` are now deliberately `numberOfReplicas: 1` with `nodeSelector: ["amd64"]`
+  (a Longhorn *node tag*, not a k8s label), so `degraded` there would mean unschedulable
+  rather than unhealthy. `k8s-infra/docs/node-pinning.md` has the patch recipe.
 - A Longhorn RWO volume is not a reason to stay — it reattaches on the other node in
   seconds (grafana, SQLite, ~45 s), but keep `maxSurge: 0` or two pods race the attach. A
   PostgreSQL data directory *is*: crossing architectures is a `pg_dumpall` and a restore,

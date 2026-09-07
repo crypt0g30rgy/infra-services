@@ -58,7 +58,7 @@ builder. They are deployed from elsewhere or by hand.
 | `k8s/ingress` | deployed — traefik + cloudflared in the `ingress` namespace |
 | `k8s/vault-warden` | deployed — vaultwarden + postgres + nightly `vaultwarden-backup`, all three pinned here since 2026-09-06 ([`../maintenance/2026-09-06-vaultwarden-to-pi.md`](../maintenance/2026-09-06-vaultwarden-to-pi.md)) |
 | `k8s/longhorn` | deployed — `longhorn-system`, v1.12.1, the cluster's storage |
-| `k8s/monitoring` | deployed — loki, promtail; grafana moved to `../amd64-srv/k8s/monitoring/grafana` with the pod |
+| `k8s/monitoring` | deployed — the namespace and `promtail` (a DaemonSet, so it runs here too). Everything else in `monitoring` is on dell as of 2026-09-07: grafana and loki are in `../amd64-srv/k8s/monitoring/`, prometheus/jaeger/otel are ArgoCD's. The README here is still the namespace overview |
 | `k8s/replicasets-cleaner` | deployed — `rs-cleaner` CronJob in `kube-system` |
 | `k8s/cluster-role.yaml`, `k8s/cluster-role-binding.yaml` | loose RBAC, applied by hand |
 | `k8s/drone-ci` | not deployed — no drone namespace |
