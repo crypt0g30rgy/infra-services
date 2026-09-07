@@ -58,7 +58,8 @@ Dashboard *JSON* is the exception — Grafana's file provisioner re-reads
 
 ## Which node
 
-**All of `monitoring` is on `dell-amd64-srv`.** That happened over two days, in three pieces,
+**All of `monitoring` is on the amd64 node** (`dell-amd64-32gb-srv` today; the selectors
+name the architecture, not the box). That happened over two days, in three pieces,
 for one reason: the pi's Longhorn disk ran out of schedulable space, so a monitoring volume there
 either fails to schedule or runs degraded, and a pod separated from its volume does every
 read and write over the LAN.
@@ -68,6 +69,7 @@ read and write over the LAN.
 | 2026-09-06 | grafana, bugsink web | `nodeSelector` in this repo; manifests moved to [`../../../amd64-srv/k8s/`](../../../amd64-srv/k8s/) |
 | 2026-09-07 | prometheus, jaeger, otel-collector | `k8s-infra`'s `components/monitoring-on-amd64` — **not** editable from here |
 | 2026-09-07 | loki | `nodeSelector` in this repo; manifests moved to [`../../../amd64-srv/k8s/monitoring/loki/`](../../../amd64-srv/k8s/monitoring/loki/) |
+| 2026-09-07 | all of it again | the amd64 box was replaced by `dell-amd64-32gb-srv`; Longhorn evicted the replicas across, and the pins became `kubernetes.io/arch: amd64` so the next swap needs no manifest edit |
 
 `promtail` is the exception and stays put: it is a DaemonSet and has to run on the pi too, or
 half the cluster's logs stop arriving. `namespace.yaml` stays here because it is
@@ -113,12 +115,12 @@ that file and nothing else.
 All three PVCs are `longhorn` with a **Retain** reclaim policy: deleting a claim leaves the
 volume and its data for a human to remove.
 
-Since 2026-09-07 all three are also **`numberOfReplicas: 1`, tagged to `dell-amd64-srv`** —
-they were 2 until the pi's disk could no longer schedule the second copy. So monitoring data
-now has no redundancy: losing dell's disk loses the metrics, the logs and the dashboard
-database. That is a deliberate trade for telemetry and it must not be copied onto anything
-holding user data. The setting is on the `volumes.longhorn.io` object, so it is in no file
-here:
+Since 2026-09-07 all three are also **`numberOfReplicas: 1`, tagged `amd64`** — a Longhorn
+node tag, which is why the volumes followed the box swap without editing them. They were 2
+until the pi's disk could no longer schedule the second copy. So monitoring data has no
+redundancy: losing that one disk loses the metrics, the logs and the dashboard database. That
+is a deliberate trade for telemetry and it must not be copied onto anything holding user data.
+The setting is on the `volumes.longhorn.io` object, so it is in no file here:
 
 ```bash
 kubectl -n longhorn-system get volumes.longhorn.io \

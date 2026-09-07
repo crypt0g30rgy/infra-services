@@ -37,7 +37,7 @@ which is why this instance is easy to mistake for the other one in a browser tab
 Before the next `up`:
 
 - set `BUGSINK_NODE_HOST` to this node's name or address (the compose file falls
-  back to `192.168.0.60`, its current LAN address, if unset)
+  back to `192.168.0.7`, the amd64 node's LAN address since 2026-09-07, if unset)
 - give it its own `SITE_TITLE`, e.g. `Bugsink (amd64)`
 - generate a separate `SECRET_KEY` with `openssl rand -base64 50` — two servers
   sharing one signing key means a session cookie from either is valid on both

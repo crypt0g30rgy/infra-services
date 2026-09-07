@@ -11,7 +11,7 @@ There is **no pi-hole**. `../pi-hole/docker-compose.yml` describes one, but no
 such process runs and `192.168.0.99` does not answer. AdGuard is it.
 
 ```
-pod → CoreDNS (1 replica, on dell-amd64-srv)
+pod → CoreDNS (1 replica, wherever the scheduler has it)
     → 192.168.0.59:53
     → docker-proxy (userspace UDP relay, because :53 is a published bridge port)
     → adguardhome (172.19.0.2:53)
@@ -121,7 +121,7 @@ one 20 qps allowance, so a laptop syncing photos spends the cluster's DNS budget
 The last 20 000 query-log entries, by client:
 
 ```
-6346  192.168.0.60   ← dell-amd64-srv, i.e. all of CoreDNS
+6346  192.168.0.60   ← the amd64 node of the day, i.e. all of CoreDNS
 4899  192.168.0.104
 4364  192.168.0.9
 2942  192.168.0.4
@@ -147,9 +147,10 @@ The seed changes four things, each marked `FIX` where it appears:
 
 1. `ratelimit_subnet_len_ipv4: 24` → **`32`** — one bucket per address instead of
    one per LAN.
-2. `ratelimit_whitelist: []` → **`[192.168.0.59, 192.168.0.60]`** — CoreDNS
-   multiplexes the whole cluster through one source address, so even a per-host
-   limit is the wrong shape for it.
+2. `ratelimit_whitelist: []` → **`[192.168.0.59, 192.168.0.7]`** — the two node
+   addresses. CoreDNS multiplexes the whole cluster through one source address,
+   so even a per-host limit is the wrong shape for it. (`.60` was the amd64 node
+   until 2026-09-07; the seed now lists `.7`.)
 3. A **second upstream** (`dns.quad9.net`). One upstream under `load_balance` is
    not redundancy; every cache miss was a single point of failure reached over
    DoH. Both are DoH, so filtering and privacy are unchanged.

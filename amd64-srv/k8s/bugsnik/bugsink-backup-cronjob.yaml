@@ -36,9 +36,9 @@ spec:
           restartPolicy: Never
           automountServiceAccountToken: false
           # The pi: both the server it dumps and the MinIO it uploads to are there, so the
-          # dump never crosses the Wi-Fi link.
+          # dump never leaves the node.
           nodeSelector:
-            kubernetes.io/hostname: pi-5-16gb-srv-0
+            kubernetes.io/arch: arm64
           securityContext:
             runAsNonRoot: true
             runAsUser: 100

@@ -29,9 +29,9 @@ services:
       # ${BUGSINK_INTERNAL_HOST} - that name resolves to the arm64 node, and using it
       # would build DSNs pointing at the other server. Override BUGSINK_NODE_HOST in
       # .env; the default is this node's current LAN address.
-      BASE_URL: "http://${BUGSINK_NODE_HOST:-192.168.0.60}:${BUGSINK_HOST_PORT}"
+      BASE_URL: "http://${BUGSINK_NODE_HOST:-192.168.0.7}:${BUGSINK_HOST_PORT}"
       # Django answers 400 to any Host not listed here.
-      ALLOWED_HOSTS: "${BUGSINK_NODE_HOST:-192.168.0.60},dell-amd64-srv,127.0.0.1,localhost"
+      ALLOWED_HOSTS: "${BUGSINK_NODE_HOST:-192.168.0.7},dell-amd64-32gb-srv,127.0.0.1,localhost"
       # Nothing terminates TLS here, so the arm64 file's `true` would have Django
       # expecting an X-Real-Ip and https scheme that never arrive - CSRF failures on
       # every login POST.

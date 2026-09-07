@@ -23,11 +23,12 @@ spec:
       labels:
         app: grafana
     spec:
-      # dell, with the rest of the infrastructure; see ../../../../k8s.md, "Node placement".
+      # The amd64 box, with the rest of the infrastructure; see ../../../../k8s.md,
+      # "Node placement".
       # The volume moves with it: SQLite's format is architecture-independent, unlike a
       # PostgreSQL data directory. Keep maxSurge 0 - two pods mean two RWO attach attempts.
       nodeSelector:
-        kubernetes.io/hostname: dell-amd64-srv
+        kubernetes.io/arch: amd64
 
       # 472 is the image's `grafana` user; fsGroup is what makes a fresh Longhorn volume
       # writable by it, otherwise Grafana exits "unable to open database file".

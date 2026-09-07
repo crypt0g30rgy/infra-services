@@ -18,7 +18,7 @@ spec:
       # architectures is unsupported, so that move was a dump and a restore into a fresh
       # volume: ../../../maintenance/2026-09-06-vaultwarden-to-pi.md.
       nodeSelector:
-        kubernetes.io/hostname: pi-5-16gb-srv-0
+        kubernetes.io/arch: arm64
 
       containers:
         - name: postgres

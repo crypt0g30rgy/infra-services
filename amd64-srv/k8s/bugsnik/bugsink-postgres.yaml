@@ -35,7 +35,7 @@ spec:
         app: postgres-bugsink
     spec:
       nodeSelector:
-        kubernetes.io/hostname: pi-5-16gb-srv-0
+        kubernetes.io/arch: arm64
 
       containers:
         - name: postgres

@@ -32,28 +32,27 @@ persistence:
   #   kubectl annotate sc microk8s-hostpath \
   #     storageclass.kubernetes.io/is-default-class-
   defaultClass: true
-  defaultClassReplicaCount: 1
+  # 2 since both nodes have a disk. This is the number on the `longhorn` class's
+  # parameters, which is what a new PVC gets; defaultReplicaCount below is only
+  # the fallback for volumes created outside a class.
+  defaultClassReplicaCount: 2
   # A deleted PVC must not take the data with it. Do not change.
   reclaimPolicy: Retain
   defaultDataLocality: disabled
 
 defaultSettings:
-  # Only nodes labelled node.longhorn.io/create-default-disk=true hold storage,
-  # which is dell alone. The pi is excluded on purpose: its root filesystem is a
-  # >90%-full microSD card also carrying the control plane. It still attaches
-  # volumes normally, it just hosts no replicas.
-  #
-  #   kubectl label node dell-amd64-srv node.longhorn.io/create-default-disk=true
+  # This only creates a disk on a labelled node *at registration*, so it does
+  # nothing for a node already in the cluster - and no node carries the label
+  # today. Both disks were added by patching `nodes.longhorn.io` instead; the
+  # recipe is in README.md and it is what a replacement node needs.
   createDefaultDiskLabeledNodes: true
   defaultDataPath: /var/lib/longhorn
 
-  # ONE replica, because only one node has a disk - no redundancy, same as hostpath
-  # gave. Label a second disk and raise this to 2 and Longhorn rebuilds online.
-  # Until then a single disk failure loses the volume, so take backups.
+  # Only for volumes created outside a StorageClass; the class itself says 2.
   defaultReplicaCount: 1
 
-  # Hard anti-affinity: with one storage node a 2-replica volume goes Degraded
-  # instead of quietly stacking both copies on the same disk.
+  # Hard anti-affinity: a 2-replica volume goes Degraded rather than quietly
+  # stacking both copies on one disk.
   replicaSoftAntiAffinity: false
 
   storageMinimalAvailablePercentage: 15

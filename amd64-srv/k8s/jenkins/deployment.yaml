@@ -5,6 +5,10 @@ metadata:
   namespace: jenkins
 spec:
   replicas: 1
+  # Recreate, not RollingUpdate: jenkins-home is RWO, so a surged second pod - especially
+  # one on another node - blocks forever on Multi-Attach. One pod at a time, always.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: jenkins
@@ -20,7 +24,7 @@ spec:
       # requested against Jenkins' own 500m. Pinned rather than left to the scheduler,
       # because "wherever it lands" is not a deployment target; the image is multi-arch.
       nodeSelector:
-        kubernetes.io/hostname: dell-amd64-srv
+        kubernetes.io/arch: amd64
 
       containers:
       - name: jenkins

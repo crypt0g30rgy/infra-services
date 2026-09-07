@@ -23,7 +23,7 @@ spec:
       # node that stays up. Both images are multi-arch. /data is rsa keys, attachments and
       # the icon cache - plain files, so the volume reattaches; the database needed a dump.
       nodeSelector:
-        kubernetes.io/hostname: pi-5-16gb-srv-0
+        kubernetes.io/arch: arm64
 
       containers:
         - name: vaultwarden

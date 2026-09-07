@@ -45,12 +45,12 @@ dns:
   ratelimit_subnet_len_ipv4: 32
   ratelimit_subnet_len_ipv6: 56
   # FIX (was []). The two microk8s nodes: .59 is the pi (and its own resolver),
-  # .60 is dell-amd64-srv, where the single CoreDNS replica runs. CoreDNS
+  # .7 is dell-amd64-32gb-srv. Wherever the single CoreDNS replica runs it
   # multiplexes every pod in the cluster through one source address, so a
-  # per-host limit is still the wrong shape for it — exempt it.
+  # per-host limit is the wrong shape for it — exempt both nodes.
   ratelimit_whitelist:
     - 192.168.0.59
-    - 192.168.0.60
+    - 192.168.0.7
   refuse_any: true
   # FIX (second entry added). One upstream and `load_balance` is not
   # redundancy: every cache miss was a single point of failure reached over

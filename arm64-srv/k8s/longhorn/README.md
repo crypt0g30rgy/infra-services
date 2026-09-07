@@ -12,30 +12,38 @@ data being left behind.
 
 ## The cluster it is running on
 
-| Node | Arch | Cores | Role in Longhorn |
+| Node | Arch | Cores | Disk in Longhorn |
 |---|---|---|---|
-| `pi-5-16gb-srv-0` | arm64 | 4 | Attaches volumes. **Hosts no replicas.** |
-| `dell-amd64-srv` | amd64 | 8 | The only storage node. Holds every replica. |
+| `pi-5-16gb-srv-0` | arm64 | 4 | `default-disk-pi-sd` — 114.7 GiB microSD, **60 GiB reserved**, so a ~54.7 GiB budget that is nearly all committed |
+| `dell-amd64-32gb-srv` | amd64 | 8 | `default-disk-32gb` — 231.2 GiB SSD/LVM, 40 GiB reserved, node tagged `amd64` |
 
-Only nodes labelled `node.longhorn.io/create-default-disk=true` contribute a
-disk (`createDefaultDiskLabeledNodes: true`), and only dell carries that label:
+Both nodes hold replicas, so most volumes run two: the pi was a
+no-replica node until it was given a disk, and the amd64 node changed machine on
+2026-09-07 (see
+[`../../../maintenance/2026-09-07-amd64-node-replacement.md`](../../../maintenance/2026-09-07-amd64-node-replacement.md)).
+Because the pi's budget is nearly full, a *new* volume there fails to schedule
+its second replica — check `robustness` after every change.
+
+`createDefaultDiskLabeledNodes: true` means Longhorn only creates a default disk
+on a node labelled `node.longhorn.io/create-default-disk=true`, **and no node
+carries that label today** — it only takes effect at node registration, which is
+no use for a node that is already in the cluster. Both disks were therefore added
+straight to the `nodes.longhorn.io` object, which is also how to give a
+replacement node its disk:
 
 ```bash
-kubectl label node dell-amd64-srv node.longhorn.io/create-default-disk=true
+kubectl -n longhorn-system patch nodes.longhorn.io <node> --type=merge -p '{"spec":{"disks":{
+  "default-disk-32gb":{"path":"/var/lib/longhorn","allowScheduling":true,
+  "evictionRequested":false,"storageReserved":42949672960,"diskType":"filesystem","tags":[]}}}}'
+
+# Node tags are separate from disk tags, and volumes select on the node one.
+kubectl -n longhorn-system patch nodes.longhorn.io <node> --type=merge -p '{"spec":{"tags":["amd64"]}}'
 ```
 
-The pi is excluded because its root filesystem is a microSD card that also
-carries a separate Docker stack and the whole microk8s image store, and has run
-over 90% full. Replica write traffic there would wear the card and risk filling
-the disk the control plane lives on. The pi still runs `longhorn-manager` and
-the CSI plugin, so pods scheduled there attach volumes normally.
-
-**Every volume therefore has one replica, on one disk.** That is the same
-redundancy hostpath gave (none), on better media — dell's volume is on an
-LVM/SSD with ~425 GB free. It is *not* a backup. To get a real second copy:
-free space on the pi or attach an external SSD to it, label the node, then
-raise `defaultSettings.defaultReplicaCount` to 2 — Longhorn rebuilds the extra
-replicas online, no downtime.
+The amd64 disk is the larger and faster of the two; the pi's is the microSD card
+the control plane also lives on, which is why it reserves 60 GiB and why nothing
+large belongs there. Two replicas is redundancy against a disk, **not a backup** —
+see the backup-target note below.
 
 ## Install
 
@@ -70,8 +78,8 @@ echo iscsi_tcp > /etc/modules-load.d/longhorn.conf   # and: modprobe iscsi_tcp
 `iscsi_tcp` is what carries the volume to the pod; without it attach fails.
 `dm_crypt` is only needed for encrypted volumes but is cheap to have.
 
-**dell also needs multipathd told to keep its hands off Longhorn's devices**,
-or attach fails with `device or resource busy`. Appended to
+**The amd64 node also needs multipathd told to keep its hands off Longhorn's
+devices**, or attach fails with `device or resource busy`. Appended to
 `/etc/multipath.conf` (backup at `/etc/multipath.conf.bak-before-longhorn`):
 
 ```
@@ -80,15 +88,17 @@ blacklist {
 }
 ```
 
-Not yet installed, and so unavailable: **`nfs-common`**. That means no RWX
-(`ReadWriteMany`) volumes and no NFS backup target on either node until it is.
+`nfs-common` is installed on `dell-amd64-32gb-srv` (2026-09-07) and still missing
+on the pi, so RWX (`ReadWriteMany`) volumes and an NFS backup target need it on
+the pi too before they will work cluster-wide.
 
 ### There is no backup target
 
 `defaultSettings.backupTarget` is unset — there is no S3 bucket and no NFS
-share to point it at. With one replica and no backups, a dell disk failure
-loses the data. This is the largest open risk in the storage layer and it is
-deliberate only in the sense that it is known.
+share to point it at. Two replicas survive a disk, not a mistake: nothing here
+protects against a deleted volume, a bad write, or both nodes going. This is the
+largest open risk in the storage layer and it is deliberate only in the sense
+that it is known.
 
 ## Two microk8s-specific gotchas
 

@@ -1,9 +1,10 @@
 # Bugsink — the in-cluster instance
 
-`bugsink/bugsink:2.5.1` in `monitoring` on `dell-amd64-srv`, with PostgreSQL 18 in `data` on
-the pi, dumped nightly to the local MinIO. Reachable from `ingress`, `xboy`, `apps`, `mtaa`;
-allowed out to DNS and its own database only. **Deployed 2026-09-06** — live, superuser
-created, one verified dump in MinIO.
+`bugsink/bugsink:2.5.1` in `monitoring` on `dell-amd64-32gb-srv`, with PostgreSQL 18 in `data`
+on the pi, dumped nightly to the local MinIO. Reachable from `ingress`, `xboy`, `apps`, `mtaa`;
+allowed out to DNS and its own database only. Deployed 2026-09-06, and **not running as of
+2026-09-07**: no `bugsink` workload exists in the cluster, so the manifests here describe what
+to re-apply, not what is live.
 
 Two things here are deliberately not what runs: the hostname (everything says
 `bugsink.example.com`; the real one is only in the cluster — `kubectl -n monitoring get
@@ -46,8 +47,8 @@ stateless half with the rest of the infrastructure ([`../../../k8s.md`](../../..
   a rule on both sides — `data` denies by default.
 - `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` are duplicated, since no keyRef crosses
   namespaces. Change them in both places.
-- An event write crosses the Wi-Fi link. Ingest POSTs return before snappea writes, so this
-  is dump and UI latency, not SDK latency.
+- An event write crosses the LAN (100 Mbps between the nodes). Ingest POSTs return before
+  snappea writes, so this is dump and UI latency, not SDK latency.
 - The backup job mounts `data`'s existing `db-backup-*` objects instead of a fourth copy of
   the script.
 

@@ -35,7 +35,7 @@ spec:
       # write every chunk over the LAN. Keep this selector and the volume's `nodeSelector`
       # tag in step — loki-pvc.yaml says where the volume side of it lives.
       nodeSelector:
-        kubernetes.io/hostname: dell-amd64-srv
+        kubernetes.io/arch: amd64
 
       # The image runs as uid 10001 and the longhorn volume comes up owned by root, so
       # without fsGroup loki cannot create /loki/wal and crash-loops on

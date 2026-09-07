@@ -18,7 +18,8 @@ kubectl rollout status  deployment/loki -n monitoring
 
 ## Which node — and the half of it that is not in this directory
 
-Pinned to `dell-amd64-srv` since 2026-09-07, with grafana and the rest of `monitoring`. It
+Pinned to the amd64 node (`dell-amd64-32gb-srv`) since 2026-09-07, with grafana and the rest
+of `monitoring`. It
 was unpinned before that, which is worse than it sounds: the pod went wherever the scheduler
 put it while its volume's replicas moved to dell, so a restart could quietly put every read
 and write on the LAN.
