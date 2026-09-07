@@ -63,9 +63,10 @@ finished — `kubectl -n longhorn-system get replicas.longhorn.io -o wide | grep
 be empty. Longhorn removed its own `nodes.longhorn.io` object when the Node disappeared; no
 manual delete was needed.
 
-State at the end: two nodes `Ready`, every pod `Running` and ready, and every volume `healthy`
-except `xboy/postgres-root-pvc`, still rebuilding its second replica onto the new disk, and
-the freshly recreated `jenkins/buildkit-cache-pvc`, `detached` until the next build attaches it.
+State at the end: two nodes `Ready`, every pod `Running` and ready, all 16 volumes `healthy`
+with 16 replicas on the new node and 12 on the pi. The one exception is the freshly recreated
+`jenkins/buildkit-cache-pvc` — `detached`/`unknown` until the next build attaches it, which is
+what an empty cache looks like.
 
 ## What moved
 
@@ -120,7 +121,7 @@ requests, so several pods were briefly `Pending` on `Insufficient memory` while 
 ones released their requests. It settled without intervention in about five minutes, but it is
 a restart wave, not a no-op — do it deliberately, not at the end of a long day.
 
-## Two things that bit, worth knowing before the next move
+## Three things that bit, worth knowing before the next move
 
 **A replica being evicted holds the volume attached to the old node.** The eviction
 controller takes its own attachment ticket, so when `xboy/postgres-root` was rescheduled
@@ -136,6 +137,26 @@ is 1, so ~15.5 GiB went across one volume at a time at ~5 MB/s. Ten simultaneous
 onto the new node competed with it. This is the whole reason the migration took hours rather
 than minutes, and the reason both nodes' Gigabit links are still on the list in
 [`../Infra.md`](../Infra.md).
+
+**A failed rebuild does not retry — it sits at its last percentage forever.**
+`postgres-root-pvc`'s second replica stalled at 55 % and stayed there for half an hour. The
+`ssync` transfer had died at 18:49 (`Failed to write data ... unexpected EOF`, then
+`Shutting down the server since it is idle for 5m0s` in the receiving `instance-manager`),
+almost certainly starved by the concurrent image pulls, but the engine still reported
+`isRebuilding: true`, so every reconcile logged *"Skipped rebuilding of replica because there
+is another rebuild in progress"* and nothing ever restarted it. `robustness: degraded` with a
+frozen `rebuildStatus.progress` is the signature. Deleting the `WO` replica cleared it and the
+fresh one completed in under a minute:
+
+```bash
+kubectl -n longhorn-system get engines.longhorn.io -o json \
+  | jq -r '.items[] | select(.status.rebuildStatus != {}) | "\(.spec.volumeName) \(.status.rebuildStatus)"'
+# progress not moving after a few minutes? drop the WO replica, keep the RW one:
+kubectl -n longhorn-system delete replicas.longhorn.io <the WO replica>
+```
+
+Check the replica directory on the receiving node if in doubt — `du -sm
+/var/lib/longhorn/replicas/<volume>-*` not growing is the same signal without trusting status.
 
 ## What did not come with the cluster
 
