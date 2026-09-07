@@ -834,7 +834,7 @@ policies are saved in `/tmp/argocd-syncpolicy-backup.txt`.
 
 ## 12. Rolling the prebuilt backup image out (2026-09-05 09:4x–10:0x UTC)
 
-`registry.internal.xboy.me/tools/s3-backup:2.0.0` replaces every `apk add` /
+`registry.internal.example.com/tools/s3-backup:2.0.0` replaces every `apk add` /
 `apt-get install` in the cluster's backup jobs. Pinned by **multi-arch index
 digest** `sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e`
 — confirmed to be the index and not a per-platform manifest by resolving the tag
@@ -860,7 +860,7 @@ image now serve every server** and `backup.sh` is byte-identical in all three
 repos again (`sha256 64162c29…d54a`).
 
 Destinations were deliberately left alone: the `db-backup` CronJobs still write
-to the **local** MinIO (`local-s3.internal.xboy.me`, bucket `db-backups`), and
+to the **local** MinIO (`local-s3.internal.example.com`, bucket `db-backups`), and
 the vaultwarden job still writes to its **remote** bucket from `s3-backup-env`.
 
 ### 12.2 Verified by running, in every namespace

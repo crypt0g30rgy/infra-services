@@ -1,5 +1,5 @@
 # The UI, through the k8s traefik (not the compose traefik that owns
-# bugsink.internal.xboy.me). Host is a placeholder, substituted at apply time. No spec.tls:
+# bugsink.internal.example.com). Host is a placeholder, substituted at apply time. No spec.tls:
 # TLS ends at Cloudflare, as with every Ingress here. No basicauth either - it would swallow
 # the SDKs' POSTs to /api/<project>/envelope/, which the DSN key already authenticates.
 #   kubectl -n monitoring port-forward svc/bugsink 8000:8000   # before the DNS record exists

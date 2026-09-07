@@ -83,7 +83,13 @@ services:
       # Dashboard Aggregator
       # ==========================
 
-      - "traefik.http.routers.dashboard.rule=Host(`dashboard.local.xboy.me`)"
+      # SUBSTITUTE THE HOST BEFORE `docker compose up`. `dashboard.local.example.com` is a
+      # placeholder - this repo is public and the real name is not in it. Brought up as-is
+      # the router loads and traefik reports healthy; the dashboard just answers on a name
+      # nothing resolves. `docker exec traefik traefik version` will not tell you - read the
+      # live rule from the running container's labels:
+      #   docker inspect traefik -f '{{ index .Config.Labels "traefik.http.routers.dashboard.rule" }}'
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.local.example.com`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls=true"
       - "traefik.http.routers.dashboard.tls.certresolver=myresolver"

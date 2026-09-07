@@ -26,7 +26,7 @@ docker compose up -d
 docker compose exec bugsink bugsink-manage createsuperuser
 ```
 
-Then `https://bugsink.internal.xboy.me` (or `http://<pi>:8000` before DNS and
+Then `https://bugsink.internal.example.com` (or `http://<pi>:8000` before DNS and
 the certificate exist).
 
 `chown 14237` first, because the image runs as uid/gid 14237 and docker creates
@@ -63,7 +63,7 @@ by the DSN; the UI has its own login.
 Create a project in the UI, copy its DSN, and give it to the service:
 
 ```
-SENTRY_DSN=https://<key>@bugsink.internal.xboy.me/<project-id>
+SENTRY_DSN=https://<key>@bugsink.internal.example.com/<project-id>
 ```
 
 The internal hostname only resolves on the LAN, so anything running off-network

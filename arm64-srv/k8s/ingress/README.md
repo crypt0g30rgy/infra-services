@@ -162,7 +162,7 @@ kubectl -n ingress get pods                    # traefik 1/1, cloudflared 1/1
 kubectl -n ingress get svc                     # traefik-external holds 192.168.1.201
 kubectl get ingress -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,ADDR:.status.loadBalancer.ingress
 kubectl -n ingress logs deploy/traefik -c traefik | grep -E '"level":"(error|fatal)"'
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: users-api-gw.xboy.me' http://192.168.1.201/
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: users-api-gw.example.com' http://192.168.1.201/
 
 # the access log is on stdout and reaching Loki
 kubectl -n ingress logs deploy/traefik -c traefik --tail=5 | grep RequestPath

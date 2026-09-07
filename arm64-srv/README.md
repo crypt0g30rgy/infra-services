@@ -31,7 +31,7 @@ Anything marked *not deployed* also carries a header comment in its own files.
 | `docker/adguard` | running — DNS for the whole LAN, so treat its ports carefully |
 | `docker/bugsnik` | running — error tracking, from `~/bugsnik/`; one instance per node, the amd64 one is `../amd64-srv/docker/bugsnik` |
 | `docker/cloudflared` | running — host-level tunnel (there is a second, separate tunnel in `k8s/ingress/cloudflared`) |
-| `docker/local-registry` | running — `registry.internal.xboy.me`, plus its UI and the digest cleaner |
+| `docker/local-registry` | running — `registry.internal.example.com`, plus its UI and the digest cleaner |
 | `docker/portainer` | running |
 | `docker/private-registries` | running — verdaccio (npm) |
 | `docker/traefik` | running — host-level proxy (the cluster has its own in `k8s/ingress/traefik`) |

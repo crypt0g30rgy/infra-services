@@ -9,7 +9,7 @@
 # Regenerate it from a machine with kubectl (see README.md) and copy it here:
 #
 #   kubectl get pods -A -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.imageID}{"\n"}{end}{end}' \
-#     | grep registry.internal.xboy.me \
+#     | grep registry.internal.example.com \
 #     | sed 's/.*@//' | sort -u
 #
 # Lines that are not digests are ignored (matching is exact, whole-line), so

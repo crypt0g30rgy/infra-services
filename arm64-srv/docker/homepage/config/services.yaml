@@ -1,5 +1,12 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
+#
+# EVERY `href` BELOW IS A PLACEHOLDER. This repo is public and the real domains are not in
+# it (see ../../../../README.md, "Hostnames here are placeholders"), so `example.com` and
+# `example.org` stand in for the personal and organisation domains. Copying this file onto
+# the host gives you a homepage that renders perfectly and whose every tile 404s.
+# Substitute before deploying; the live file is the source of truth for the real names:
+#   docker exec homepage cat /app/config/services.yaml
 
 - DEVELOPMENT:
     - TDI-GIT:
@@ -15,59 +22,59 @@
 - ORG-WEBSITE:
     - root:
         icon: mdi-blog
-        href: https://tdi.solutions
+        href: https://example.org
         description: Org Home
 
 - BLOG-WEBSITE:
     - root:
         icon: mdi-nodejs
-        href: https://xboy.me
+        href: https://example.com
         description: Redirector website
     - blog:
         icon: mdi-post
-        href: https://blog.xboy.me
+        href: https://blog.example.com
         description: My personal blog
 
 - SELF-HOSTED-SERVICES:
     - homepage:
         icon: mdi-home
-        href: https://home.internal.xboy.me
+        href: https://home.internal.example.com
         description: My Homelab homepage
     - grafana:
         icon: mdi-chart-line
-        href: https://grafana.internal.xboy.me
+        href: https://grafana.internal.example.com
         description: Grafana dashboards
     - bugsink:
         icon: mdi-bug
-        href: https://bugsink.internal.xboy.me
+        href: https://bugsink.internal.example.com
         description: Bugsink error tracking (Sentry-compatible)
     - gitea:
         icon: mdi-source-repository
-        href: https://gitea.internal.xboy.me
+        href: https://gitea.internal.example.com
         description: Gitea git server
     - jenkins:
         icon: mdi-jenkins
-        href: https://jenkins.internal.xboy.me
+        href: https://jenkins.internal.example.com
         description: Jenkins CI/CD server
     - pihole:
         icon: mdi-pihole
-        href: https://pihole.internal.xboy.me/dashboard
+        href: https://pihole.internal.example.com/dashboard
         description: Pi-hole ad blocker and DNS server
     - portainer:
         icon: mdi-portainer
-        href: https://portainer.internal.xboy.me
+        href: https://portainer.internal.example.com
         description: Portainer container management UI
     - traefik:
         icon: mdi-traefik
-        href: https://traefik.internal.xboy.me/dashboard/
+        href: https://traefik.internal.example.com/dashboard/
         description: Traefik reverse proxy and dashboard
     - vaultwarden:
         icon: mdi-vault
-        href: https://vault.internal.xboy.me
+        href: https://vault.internal.example.com
         description: Vaultwarden password manager
 
 - CONTACT:
     - email:
         icon: mdi-email
-        href: mailto:admin@mail.internal.xboy.me
+        href: mailto:admin@mail.internal.example.com
         description: Contact me via email

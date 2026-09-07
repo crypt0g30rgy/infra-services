@@ -18,7 +18,7 @@ shared reference for all three instances:
 | Runs on | pi, docker | dell, docker | k8s: web on dell, database on the pi |
 | Database | SQLite bind mount | SQLite in the container layer (!) | PostgreSQL 18, StatefulSet in `data` |
 | Backup | by hand | none | nightly `pg_dumpall` → local MinIO |
-| Reached via | compose traefik, `bugsink.internal.xboy.me` | `<dell>:8000` | k8s traefik, own hostname |
+| Reached via | compose traefik, `bugsink.internal.example.com` | `<dell>:8000` | k8s traefik, own hostname |
 | Outbound | unrestricted | unrestricted | DNS + its database |
 
 ## Files
@@ -200,7 +200,7 @@ one database. `FailedScheduling ... Insufficient memory` on a restart means Jenk
   Django answers 400 to anything unlisted — the pod never goes Ready, with nothing in the
   events to say why.
 - **The committed hostname is a placeholder**: applied as-is, the UI 400s on its own name.
-- **The two traefiks are different proxies.** `bugsink.internal.xboy.me` belongs to the
+- **The two traefiks are different proxies.** `bugsink.internal.example.com` belongs to the
   compose one on the pi; this instance must keep its own hostname.
 - **`BEHIND_HTTPS_PROXY=true` is required** — TLS ends at Cloudflare, so without it every
   login POST fails CSRF with `(wrong scheme)`.

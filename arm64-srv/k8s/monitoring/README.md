@@ -17,8 +17,8 @@ kubectl apply -f arm64-srv/k8s/monitoring/namespace.yaml
 kubectl apply -f arm64-srv/k8s/monitoring/promtail/
 kubectl apply -f amd64-srv/k8s/monitoring/loki/
 # NOT the grafana directory: grafana-ingress.yaml's host is a placeholder, and applying it
-# takes grafana.xboy.me off the internet with everything still reporting healthy. Apply the
-# files you changed, and `kubectl diff -f` first. ../../../README.md has the details.
+# takes Grafana off the internet with everything still reporting healthy. Apply the files you
+# changed, and `kubectl diff -f` first. ../../../README.md has the details.
 kubectl apply -f amd64-srv/k8s/monitoring/grafana/grafana-deployment.yaml   # etc, per file
 ```
 

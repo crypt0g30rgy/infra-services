@@ -130,7 +130,7 @@ microk8s kubectl delete pod -n kube-system -l k8s-app=kube-dns
 microk8s kubectl run -it --rm --restart=Never --image=busybox nslookup myhost.local   
 ```
 
-### Node-level DNS for `*.internal.xboy.me` (containerd, not coredns)
+### Node-level DNS for `*.internal.example.com` (containerd, not coredns)
 
 The coredns change above only fixes name resolution **inside pods**. Pulling an
 image does not go through coredns — containerd on the node uses the host's own
@@ -139,8 +139,8 @@ host too.
 
 `pi-5-16gb-srv-0` gets this for free: its `/etc/resolv.conf` is
 `nameserver 192.168.0.59`, which is AdGuard running on that same machine, and
-AdGuard has rewrites for `registry.internal.xboy.me` and
-`local-s3.internal.xboy.me` → `192.168.0.59`.
+AdGuard has rewrites for `registry.internal.example.com` and
+`local-s3.internal.example.com` → `192.168.0.59`.
 
 `dell-amd64-srv` does not. It uses `systemd-resolved` (`127.0.0.53`) with a
 public upstream, which answers those names with **Cloudflare edge addresses**.
@@ -149,7 +149,7 @@ pull dies with a message that looks like a certificate problem but is not:
 
 ```
 failed to resolve image: failed to do request: Head
-"https://registry.internal.xboy.me/v2/ci-tools/manifests/sha256:...":
+"https://registry.internal.example.com/v2/ci-tools/manifests/sha256:...":
 remote error: tls: handshake failure
 ```
 
@@ -160,8 +160,8 @@ Fixed by pinning both names in dell's `/etc/hosts` (backup at
 `/etc/hosts.bak-before-internal-registry`):
 
 ```
-192.168.0.59 registry.internal.xboy.me
-192.168.0.59 local-s3.internal.xboy.me
+192.168.0.59 registry.internal.example.com
+192.168.0.59 local-s3.internal.example.com
 ```
 
 `/etc/hosts` rather than `certs.d`/`skip_verify` on purpose: the registry's
@@ -179,7 +179,7 @@ the pod use the *host's* resolver rather than coredns:
 ```bash
 kubectl run dnscheck --rm -it --restart=Never --image=busybox:1.37 \
   --overrides='{"spec":{"nodeName":"dell-amd64-srv","hostNetwork":true,"dnsPolicy":"Default"}}' \
-  -- nslookup registry.internal.xboy.me
+  -- nslookup registry.internal.example.com
 ```
 
 ### Node placement: which workload belongs on which node

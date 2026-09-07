@@ -37,7 +37,10 @@ data:
   EMAIL_USE_TLS: "true"
   EMAIL_USE_SSL: "false"
   EMAIL_TIMEOUT: "5"
-  DEFAULT_FROM_EMAIL: "Bugsink <bugsink@xboy.me>"
+  # Placeholder domain (public repo). Harmless as-is while EMAIL_HOST is blank — mail goes
+  # to the container log — but substitute the real one before pointing this at an SMTP
+  # server, or every notification is From: an address that does not exist.
+  DEFAULT_FROM_EMAIL: "Bugsink <bugsink@example.com>"
   EMAIL_LOGGING: "true"
 
   SNAPPEA_NUM_WORKERS: "2"

@@ -181,11 +181,17 @@ spec:
             kubernetes.io/hostname: pi-5-16gb-srv-0
           containers:
           - name: backup
+            # SUBSTITUTE THE REGISTRY HOST BEFORE APPLYING. `registry.internal.example.com`
+            # is a placeholder - this repo is public and the real name is not in it. Applied
+            # as-is this is an ImagePullBackOff and the backup silently stops running; see
+            # ../../../README.md, "Hostnames here are placeholders". The live value:
+            #   kubectl -n <ns> get cronjob <name> \
+            #     -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}'
             # Shared backup image, pinned by multi-arch *index* digest - a per-platform
             # digest is unpullable on one of the two nodes. Refresh with
-            # `crane digest registry.internal.xboy.me/tools/s3-backup:2.0.0`. Ships bash,
+            # `crane digest registry.internal.example.com/tools/s3-backup:2.0.0`. Ships bash,
             # aws-cli, pg_dump 18.6, tar, gzip, sha256sum, GNU date, grep and sed.
-            image: registry.internal.xboy.me/tools/s3-backup:2.0.0@sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e
+            image: registry.internal.example.com/tools/s3-backup:2.0.0@sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e
             imagePullPolicy: IfNotPresent
             command:
               - /scripts/backup.sh

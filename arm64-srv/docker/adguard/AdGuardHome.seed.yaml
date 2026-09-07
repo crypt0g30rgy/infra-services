@@ -199,8 +199,15 @@ filtering:
   # Load-bearing: every internal name, including local-s3 (MinIO), resolves to the
   # pi through this rewrite. CoreDNS also pins local-s3 in a `hosts` entry, added
   # when this lookup timed out intermittently — that was the rate limit above.
+  #
+  # SUBSTITUTE THE DOMAIN BEFORE SEEDING. `internal.example.com` is a placeholder —
+  # this repo is public and the real internal domain is not in it. Seeding as-is
+  # gives you an AdGuard that resolves nothing internal while looking perfectly
+  # configured: the rewrite exists, it just matches no name anyone asks for. The
+  # live value is `docker exec adguardhome cat /opt/adguardhome/conf/AdGuardHome.yaml
+  # | grep -A1 rewrites` (or `./manage.sh config`).
   rewrites:
-    - domain: '*.internal.xboy.me'
+    - domain: '*.internal.example.com'
       answer: 192.168.0.59
       enabled: true
   safe_fs_patterns:

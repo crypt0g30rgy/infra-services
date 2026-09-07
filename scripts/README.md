@@ -60,7 +60,7 @@ replica and no backup target, so it lands under a heading that says so.
 
 ### Two categories of finding to leave alone
 
-**Internal registry.** `registry.internal.xboy.me/...` is skipped by design. Those
+**Internal registry.** `registry.internal.example.com/...` is skipped by design. Those
 images are built by this platform's own CI, their tags are commit SHAs, and there
 is no upstream to be behind. Skipping them also means the job needs no registry
 credentials at all — every registry it does talk to issues a pull-scoped token

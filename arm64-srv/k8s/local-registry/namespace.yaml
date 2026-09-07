@@ -1,5 +1,5 @@
 # NOT DEPLOYED as of 2026-09-05: there is no `internal-registry` namespace in the
-# cluster. The registry that actually serves registry.internal.xboy.me is the
+# cluster. The registry that actually serves registry.internal.example.com is the
 # compose stack in ../../docker/local-registry/, running on the arm64 host.
 # Apply this only if you intend to move the registry into Kubernetes.
 #

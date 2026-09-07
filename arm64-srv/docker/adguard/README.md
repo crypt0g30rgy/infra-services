@@ -52,9 +52,15 @@ bumps its `schema_version`.
 
 ```sh
 git clone <this repo> && cd arm64-srv/docker/adguard
-printf 'ADGUARD_INTERNAL_HOST=adguard.internal.xboy.me\n' > .env
+printf 'ADGUARD_INTERNAL_HOST=adguard.internal.example.com\n' > .env   # real domain, not this
 ./manage.sh up
 ```
+
+Substitute the real internal domain in both places, not just the one you see fail: the `.env`
+above, **and** the `rewrites:` entry in `AdGuardHome.seed.yaml`. This repo is public and holds
+placeholders only (see [`../../../README.md`](../../../README.md), "Hostnames here are
+placeholders"). Miss the seed one and AdGuard comes up healthy, answers queries, and resolves
+nothing internal — including `local-s3`, which the cluster's backups depend on.
 
 `up` is safe to run repeatedly. It creates the `internal` network if missing,
 creates `config/` and `work/`, seeds `config/AdGuardHome.yaml` from
@@ -182,8 +188,8 @@ cluster rides it out; anything mid-lookup on the LAN sees one failure.
   host from its own containers without the `macvlan-shim` interface anyway.
 - **`dig version.bind chaos @192.168.0.59` timing out is not a fault.** It is
   `blocked_hosts` in the config. Do not use it as a health check.
-- **`*.internal.xboy.me → 192.168.0.59` is a rewrite in this config**, and the
-  cluster depends on it (MinIO at `local-s3.internal.xboy.me`, among others).
+- **`*.internal.example.com → 192.168.0.59` is a rewrite in this config**, and the
+  cluster depends on it (MinIO at `local-s3.internal.example.com`, among others).
   CoreDNS also has a `hosts` entry pinning `local-s3` to the same address, added
   because the lookup used to time out intermittently — that was the rate limit
   above, not the rewrite.

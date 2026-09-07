@@ -3,7 +3,7 @@
 
 Scope is public registries that answer anonymously - Docker Hub, ghcr.io, gcr.io
 and friends. Internal registries are listed as out of scope rather than checked:
-registry.internal.xboy.me and the pi's local registry need credentials, are not
+registry.internal.example.com and the pi's local registry need credentials, are not
 routable from a GitHub runner, and hold images this repo builds itself, so
 "is there a newer upstream tag" is not a question they can answer.
 
