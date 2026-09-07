@@ -1,3 +1,9 @@
+# DO NOT APPLY THIS FILE AS-IS. The host below is a placeholder - this repo is public and
+# the real name is not in it (see ../../../../README.md, "Hostnames here are placeholders").
+# The live Ingress is `grafana.example.com`, and applying this replaces it with
+# `grafana.example.com`: the pod stays healthy, the Ingress object stays green, and Grafana
+# simply stops answering. `kubectl get ingress -n monitoring grafana` is the real value; edit
+# the host here to match it in a temporary copy if you need to change anything else.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

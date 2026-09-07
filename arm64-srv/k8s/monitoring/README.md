@@ -16,7 +16,10 @@ directory does nothing at all until somebody applies it.
 kubectl apply -f arm64-srv/k8s/monitoring/namespace.yaml
 kubectl apply -f arm64-srv/k8s/monitoring/promtail/
 kubectl apply -f amd64-srv/k8s/monitoring/loki/
-kubectl apply -f amd64-srv/k8s/monitoring/grafana/
+# NOT the grafana directory: grafana-ingress.yaml's host is a placeholder, and applying it
+# takes grafana.example.com off the internet with everything still reporting healthy. Apply the
+# files you changed, and `kubectl diff -f` first. ../../../README.md has the details.
+kubectl apply -f amd64-srv/k8s/monitoring/grafana/grafana-deployment.yaml   # etc, per file
 ```
 
 Order matters once, on a clean namespace: loki before promtail (promtail's pushes fail
