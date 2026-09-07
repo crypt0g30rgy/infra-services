@@ -23,25 +23,48 @@ it. Each node directory has a `README.md` listing what is deployed there and wha
 is only kept for reference — anything not deployed also says so in its own files,
 so a stale manifest cannot be mistaken for a live one.
 
-## Hostnames here are placeholders, so `apply -f <dir>/` is not safe
+## Hostnames here are placeholders — nothing in this repo applies verbatim
 
-Every Ingress in this repo carries an `*.example.com` host, because this repo is public and
-the real names are not in it. The live values are the `.example.com` (and `example.org`,
-`example.net`) names in `kubectl get ingress -A`. That makes a directory-wide apply a
-foot-gun: `kubectl apply -f amd64-srv/k8s/monitoring/grafana/` rewrites the live host to
-`grafana.example.com` and takes Grafana off the internet, with a healthy pod and a green
-Ingress object the whole time.
+**This repo is public, so no real domain, hostname or subdomain is in it.** Every one is
+written as `*.example.com`, or `*.example.org` for the organisation domain. The live values
+exist only on the hosts and in the cluster; `kubectl get ingress -A` and
+`docker inspect`/`docker exec` on the box are the sources of truth.
+
+This is not limited to Ingress hosts. The placeholder appears anywhere a name would have
+been, and in several places it is **load-bearing** — the file is wrong until you substitute:
+
+| file | what breaks if applied as-is |
+| --- | --- |
+| every `*ingress*.yaml` | the live host is replaced; pod healthy, Ingress green, service off the internet |
+| `amd64-srv/k8s/bugsnik/bugsink-backup-cronjob.yaml`, `arm64-srv/k8s/vault-warden/s3-backup-job.yaml` | placeholder **registry** in the image ref → `ImagePullBackOff`, i.e. backups quietly stop |
+| `arm64-srv/docker/traefik/docker-compose.yml` | dashboard router answers on a name nothing resolves |
+| `arm64-srv/docker/adguard/AdGuardHome.seed.yaml` | the `*.internal` rewrite matches no name, so nothing internal resolves |
+| `arm64-srv/docker/homepage/config/services.yaml` | every tile 404s |
+| `amd64-srv/k8s/bugsnik/bugsink-config.yaml` | `DEFAULT_FROM_EMAIL` on a domain that does not exist (inert while `EMAIL_HOST` is blank) |
+
+Each of those carries the substitution recipe in its own header. The pattern, as used in
+[`amd64-srv/k8s/bugsnik/README.md`](./amd64-srv/k8s/bugsnik/README.md):
+
+```bash
+sed 's/bugsink\.example\.com/<the real host>/g' "$f" | kubectl apply -f -
+```
+
+Note what these failures have in common: **every one of them is silent.** Nothing reports
+unhealthy, so the only reliable habit is `kubectl diff -f` (or `docker inspect`) before the
+change, and reading the diff for a hostname you did not mean to touch.
 
 So: **apply the files you changed, never the directory, unless you have checked it holds no
-Ingress.** `kubectl diff -f <dir>/` before every apply is the habit that catches this — and
-it catches the other direction too, since a tag bumped in git may never have been applied
-(loki was two patch releases behind its own manifest for a week; grafana still is a minor
-behind, deliberately left for a human because a Grafana minor migrates its SQLite database
-and does not migrate back).
+Ingress.** `kubectl diff -f <dir>/` catches the other direction too, since a tag bumped in
+git may never have been applied (loki was two patch releases behind its own manifest for a
+week; grafana still is a minor behind, deliberately left for a human because a Grafana minor
+migrates its SQLite database and does not migrate back).
 
 The vaultwarden ingress is worse than a rewrite: the live object is named
 `password-manager` and the file declares `ingress`, so applying it adds a *second* Ingress
 rather than replacing the first.
+
+When you add a file here, add the placeholder, not the name. `git grep -nE 'example\.(com|org)'`
+should be the only thing that matches a domain in this tree.
 
 ## Keeping images current
 

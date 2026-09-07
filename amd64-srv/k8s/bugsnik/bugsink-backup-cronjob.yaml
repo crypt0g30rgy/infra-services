@@ -47,6 +47,12 @@ spec:
               type: RuntimeDefault
           containers:
           - name: backup
+            # SUBSTITUTE THE REGISTRY HOST BEFORE APPLYING. `registry.internal.example.com`
+            # is a placeholder - this repo is public and the real name is not in it. Applied
+            # as-is this is an ImagePullBackOff, and the failure is a CronJob that stops
+            # taking backups without anybody watching a pod. The live value:
+            #   kubectl -n data get cronjob db-backup-postgres-bugsink \
+            #     -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}'
             # Pinned by multi-arch *index* digest - a per-platform digest is unpullable on
             # one of the two nodes. Ships pg_dumpall 18.6, so postgres here must stay <= 18.
             image: registry.internal.example.com/tools/s3-backup:2.0.0@sha256:9dd96606c8b5c53a442d62b1a869469fde9692bc6b7ce08804237387640f0a4e

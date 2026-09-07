@@ -21,7 +21,7 @@ case "${1:-}" in
   up)
     if [[ ! -f .env ]]; then
       echo "✋ .env is missing (it is gitignored). Create it with:"
-      echo "     ADGUARD_INTERNAL_HOST=adguard.internal.example.com"
+      echo "     ADGUARD_INTERNAL_HOST=adguard.internal.example.com   # <- real domain, not this placeholder"
       echo "   traefik's router rule is built from it; compose will otherwise"
       echo "   substitute an empty Host() and traefik will reject the router."
       exit 1

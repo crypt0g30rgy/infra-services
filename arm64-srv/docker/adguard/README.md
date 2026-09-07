@@ -52,9 +52,15 @@ bumps its `schema_version`.
 
 ```sh
 git clone <this repo> && cd arm64-srv/docker/adguard
-printf 'ADGUARD_INTERNAL_HOST=adguard.internal.example.com\n' > .env
+printf 'ADGUARD_INTERNAL_HOST=adguard.internal.example.com\n' > .env   # real domain, not this
 ./manage.sh up
 ```
+
+Substitute the real internal domain in both places, not just the one you see fail: the `.env`
+above, **and** the `rewrites:` entry in `AdGuardHome.seed.yaml`. This repo is public and holds
+placeholders only (see [`../../../README.md`](../../../README.md), "Hostnames here are
+placeholders"). Miss the seed one and AdGuard comes up healthy, answers queries, and resolves
+nothing internal — including `local-s3`, which the cluster's backups depend on.
 
 `up` is safe to run repeatedly. It creates the `internal` network if missing,
 creates `config/` and `work/`, seeds `config/AdGuardHome.yaml` from

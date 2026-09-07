@@ -4,8 +4,13 @@ metadata:
   name: vaultwarden-config
   namespace: vaultwarden
 data:
-  # Public URL of your Vaultwarden instance
-  DOMAIN: "https://secret-vault.mypasswords.com"
+  # Public URL of your Vaultwarden instance. SUBSTITUTE BEFORE APPLYING - placeholder, public
+  # repo (../../../README.md, "Hostnames here are placeholders"). It must match the live
+  # Ingress host exactly: Vaultwarden builds WebAuthn origins, attachment and emergency-access
+  # links from this, so a wrong value logs nothing and breaks 2FA registration. Live value:
+  #   kubectl -n vaultwarden get cm vaultwarden-config -o jsonpath='{.data.DOMAIN}'
+  #   kubectl -n vaultwarden get ingress password-manager -o jsonpath='{.spec.rules[0].host}'
+  DOMAIN: "https://passwords.example.com"
 
   # Production security best practice: disable new signups
   SIGNUPS_ALLOWED: "false"
