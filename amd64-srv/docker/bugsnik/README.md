@@ -1,6 +1,9 @@
 # Bugsink — the amd64 instance
 
-One instance per node. This is the amd64 one; the arm64 one is
+One compose instance per node, plus one in the cluster
+([`../../k8s/bugsnik/`](../../k8s/bugsnik/README.md) — web pod on this node, its
+PostgreSQL on the pi). This
+is the amd64 compose one; the arm64 one is
 [`../../../arm64-srv/docker/bugsnik/`](../../../arm64-srv/docker/bugsnik/README.md),
 and that README covers everything shared: what bugsink is, how it relates to the
 otel/Jaeger path, `.env` keys, email, the SQLite-vs-Postgres decision, and the

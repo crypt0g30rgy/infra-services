@@ -1,0 +1,106 @@
+# Bugsink's database: PostgreSQL (not the compose instances' SQLite) so the shared
+# pg_dumpall CronJob covers it, in `data` on the pi with the cluster's other databases.
+# Name/user/password come from postgres-bugsink-secret - see bugsink-secret.yaml.
+# A data directory cannot cross architectures: moving this off the pi is dump + restore.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-bugsink
+  namespace: data
+  labels:
+    app: postgres-bugsink
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-bugsink
+  ports:
+    - port: 5432
+      name: postgres
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-bugsink
+  namespace: data
+spec:
+  serviceName: postgres-bugsink
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-bugsink
+  template:
+    metadata:
+      labels:
+        app: postgres-bugsink
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: pi-5-16gb-srv-0
+
+      containers:
+        - name: postgres
+          # A major bump needs dump/wipe/restore, and must stay <= the backup image's
+          # pg_dumpall (18.6): ../../../maintenance/2026-09-05-postgres-15-to-18.md
+          image: postgres:18-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            # Explicit: 18's default moved, and unset means a cluster in the writable layer.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-bugsink-secret
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-bugsink-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-bugsink-secret
+                  key: POSTGRES_PASSWORD
+
+          # pg_isready, not a TCP check: crash recovery accepts connections and refuses
+          # queries.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-U", "bugsink", "-d", "bugsink"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-U", "bugsink", "-d", "bugsink"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+
+          # Half of postgres-svc next to it; the pi is CPU-tight.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # Explicit: the unset default was microk8s-hostpath, which pins to one node's disk.
+        # Immutable - changing it means deleting the StatefulSet with --cascade=orphan.
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 5Gi

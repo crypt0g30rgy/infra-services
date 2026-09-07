@@ -5,7 +5,7 @@ which one owns the object before editing anything:
 
 | owned here, applied by hand | owned by `k8s-infra`, synced by ArgoCD |
 | --- | --- |
-| grafana, loki, promtail | prometheus, jaeger, otel-collector |
+| grafana (in `../../../amd64-srv/k8s/monitoring/grafana/`), loki, promtail | prometheus, jaeger, otel-collector |
 | `kubectl apply -f <dir>/` | land in `k8s-infra/infrastructure/base/monitoring/` |
 
 Getting it the wrong way round fails in whichever direction is quietest: a `kubectl apply`
@@ -16,7 +16,7 @@ directory does nothing at all until somebody applies it.
 kubectl apply -f arm64-srv/k8s/monitoring/namespace.yaml
 kubectl apply -f arm64-srv/k8s/monitoring/loki/
 kubectl apply -f arm64-srv/k8s/monitoring/promtail/
-kubectl apply -f arm64-srv/k8s/monitoring/grafana/
+kubectl apply -f amd64-srv/k8s/monitoring/grafana/
 ```
 
 Order matters once, on a clean namespace: loki before promtail (promtail's pushes fail
@@ -46,10 +46,19 @@ Dashboard *JSON* is the exception — Grafana's file provisioner re-reads
   the targets whose `__host__` matches its own hostname, so with the pod name it tails
   nothing, silently, while reporting Ready), and the pipeline must use the `cri` stage, not
   `docker` — microk8s runs containerd.
-- **`grafana/`** — the UI, its datasources, and the two provisioned dashboards
-  ("Platform — Cluster" and "Platform — Services"). Its README covers the state on the PVC,
-  the admin password, and the two different label names the same service goes by
+- **`../../../amd64-srv/k8s/monitoring/grafana/`** — the UI, its datasources, and the two
+  provisioned dashboards
+  ("Platform — Cluster" and "Platform — Services"); it moved out of this tree when the pod
+  was pinned to dell. Its README covers the state on the PVC, the admin password, and the two different label names the same service goes by
   (`service_name` in spanmetrics, `exported_job` in the Node instrumentation).
+
+## Which node
+
+Since 2026-09-06 `grafana` and `bugsink` are pinned to `dell-amd64-srv` and their manifests
+live in [`../../../amd64-srv/k8s/`](../../../amd64-srv/k8s/); prometheus, jaeger and
+otel-collector (ArgoCD-owned) stay on the pi next to what they scrape, and `loki` is
+unpinned. Grafana's volume moved because SQLite is architecture-independent — a PostgreSQL
+data directory is not. Policy: [`../../../k8s.md`](../../../k8s.md), "Node placement".
 
 There is no prometheus directory here any more. It was a drifted copy of the ArgoCD-owned
 deployment — its scrape config still described an nginx ingress controller that has never

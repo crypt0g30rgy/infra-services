@@ -1,0 +1,136 @@
+# Bugsink in the cluster, third instance after the two compose ones
+# (../../docker/bugsnik/, ../../../arm64-srv/docker/bugsnik/ - that README is the shared
+# reference). One container: gunicorn + the snappea worker, as the image's own CMD.
+# Its boot runs `check --deploy` -> migrate -> serve, so a tag bump migrates itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bugsink
+  namespace: monitoring
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  # maxSurge 0: a surged pod means two versions migrating the same database.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: bugsink
+  template:
+    metadata:
+      labels:
+        app: bugsink
+    spec:
+      # Stateless half of the pair; the database is on the pi. See ../../../k8s.md.
+      nodeSelector:
+        kubernetes.io/hostname: dell-amd64-srv
+
+      # 14237 is the image's `bugsink` user.
+      securityContext:
+        runAsUser: 14237
+        runAsGroup: 14237
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: bugsink
+        image: bugsink/bugsink:2.5.1
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 8000
+          name: http
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+
+        # Settings surface; Secret second so it wins, `env:` below wins over both.
+        # Neither is watched - edits need a rollout restart.
+        envFrom:
+        - configMapRef:
+            name: bugsink-config
+        - secretRef:
+            name: bugsink-secret
+
+        env:
+        - name: PORT
+          value: "8000"
+
+        # Replaces the whole DATABASES entry, so no SQLite file and no volume. $(VAR) is
+        # kubelet's expansion and does resolve envFrom values. FQDN because the database
+        # is in another namespace.
+        - name: DATABASE_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-bugsink.data.svc.cluster.local:5432/$(POSTGRES_DB)"
+
+        # Every link bugsink writes about itself, including the DSNs shown in the UI.
+        # In-cluster senders must use the Service instead - that host is egress-denied.
+        - name: BASE_URL
+          value: "https://$(BUGSINK_HOST)"
+
+        # Django answers 400 to any Host not listed, and kubelet probes use the pod IP,
+        # so POD_IP is required or the pod never goes Ready.
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: ALLOWED_HOSTS
+          value: "$(BUGSINK_HOST),bugsink,bugsink.monitoring.svc.cluster.local,$(POD_IP),127.0.0.1,localhost"
+
+        volumeMounts:
+        # snappea's queue is a SQLite file at a hard-coded /tmp path; losing it is fine.
+        - name: tmp
+          mountPath: /tmp
+
+        # /health/ready is the only health endpoint and it covers the database.
+        startupProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          periodSeconds: 10
+          # 5 min: first boot migrates an empty server before it listens.
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          periodSeconds: 30
+          failureThreshold: 5
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 192Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bugsink
+  namespace: monitoring
+spec:
+  selector:
+    app: bugsink
+  ports:
+  - port: 8000
+    targetPort: http
+    name: http

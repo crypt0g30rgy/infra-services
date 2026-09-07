@@ -5,6 +5,12 @@ metadata:
   namespace: vaultwarden
 spec:
   replicas: 1
+  # maxSurge 0: the /data claim is RWO, so a surged pod just races the attach.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: vaultwarden
@@ -13,11 +19,11 @@ spec:
       labels:
         app: vaultwarden
     spec:
-      # On dell with postgres-statefulset.yaml: dell is the only Longhorn storage node, so a
-      # pod there writes its own disk instead of reaching the same data over iSCSI, and the
-      # pi had ~3670m of 4000m CPU requested against dell's ~15%. Both images are multi-arch.
+      # The pi with its database (2026-09-06, was dell): a critical service belongs on the
+      # node that stays up. Both images are multi-arch. /data is rsa keys, attachments and
+      # the icon cache - plain files, so the volume reattaches; the database needed a dump.
       nodeSelector:
-        kubernetes.io/hostname: dell-amd64-srv
+        kubernetes.io/hostname: pi-5-16gb-srv-0
 
       containers:
         - name: vaultwarden

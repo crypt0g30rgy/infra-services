@@ -1,0 +1,50 @@
+# Non-secret bugsink settings, same keys as the compose instances' `.env`.
+# https://www.bugsink.com/docs/settings/ - credentials are in bugsink-secret.yaml;
+# PORT, POD_IP, ALLOWED_HOSTS, BASE_URL and DATABASE_URL are in the Deployment.
+# Blank numeric values reach int("") and stop the boot.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bugsink-config
+  namespace: monitoring
+  labels:
+    app: bugsink
+data:
+  # Placeholder; substituted at apply time. Also in bugsink-ingress.yaml.
+  BUGSINK_HOST: "bugsink.example.com"
+
+  # Copies of data/postgres-bugsink-secret - no cross-namespace keyRef exists.
+  POSTGRES_DB: "bugsink"
+  POSTGRES_USER: "bugsink"
+
+  # Required behind traefik+Cloudflare, else login POSTs fail CSRF. Adds no
+  # HTTPS redirect, so in-cluster plain HTTP ingestion works.
+  BEHIND_HTTPS_PROXY: "true"
+  USE_X_REAL_IP: "true"
+  USE_X_FORWARDED_HOST: "false"
+
+  SITE_TITLE: "Bugsink (k8s)"
+  TIME_ZONE: "Africa/Nairobi"
+  USER_REGISTRATION: "CB_ADMINS"
+  USER_REGISTRATION_VERIFY_EMAIL: "false"
+  SINGLE_TEAM: "true"
+  # Egress-denied, so leaving it on means a failing request on a schedule.
+  PHONEHOME: "false"
+
+  # Blank EMAIL_HOST = mail to the container log, the only state egress allows.
+  EMAIL_HOST: ""
+  EMAIL_PORT: "587"
+  EMAIL_USE_TLS: "true"
+  EMAIL_USE_SSL: "false"
+  EMAIL_TIMEOUT: "5"
+  DEFAULT_FROM_EMAIL: "Bugsink <bugsink@xboy.me>"
+  EMAIL_LOGGING: "true"
+
+  SNAPPEA_NUM_WORKERS: "2"
+  MAX_EVENTS_PER_PROJECT_PER_5_MINUTES: "1000"
+  MAX_EVENTS_PER_PROJECT_PER_HOUR: "5000"
+  MAX_EVENTS_PER_PROJECT_PER_MONTH: "1000000"
+  MAX_EMAILS_PER_HOUR: "60"
+
+  # Unset: SENTRY_DSN and ALERTS_WEBHOOK_* (egress denied),
+  # FILE_EVENT_STORAGE_* (would put event bodies outside the pg_dumpall).

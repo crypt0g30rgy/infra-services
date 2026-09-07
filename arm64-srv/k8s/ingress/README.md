@@ -116,7 +116,7 @@ The `filters` block that used to be there (`statusCodes: 400-599`, `retryAttempt
 a count of slow and failed requests wearing the label "requests".
 
 Both feed **"Platform — Ingress (traefik)"** in Grafana
-(`../monitoring/grafana/grafana-dashboard-traefik.yaml`), which mixes the two datasources
+(`../../../amd64-srv/k8s/monitoring/grafana/grafana-dashboard-traefik.yaml`), which mixes the two datasources
 for exactly this reason.
 
 Worth knowing when reading any of it: **404 dominates.** This cluster is scanned

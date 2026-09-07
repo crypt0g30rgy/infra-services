@@ -1,5 +1,5 @@
 # NOT DEPLOYED as of 2026-09-05: Jenkins runs in Kubernetes now - see
-# ../../k8s/jenkins/ (deployment `jenkins/jenkins`). No compose file for it
+# ../../../amd64-srv/k8s/jenkins/ (deployment `jenkins/jenkins`). No compose file for it
 # exists on either host. Two ways to run one CI server is one too many.
 #
 services:

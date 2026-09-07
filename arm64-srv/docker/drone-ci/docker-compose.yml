@@ -1,6 +1,6 @@
 # NOT DEPLOYED as of 2026-09-05: no Drone container runs on either host and there is
 # no drone namespace in the cluster either (see ../../k8s/drone-ci/, also
-# undeployed). CI is Jenkins - ../../k8s/jenkins/.
+# undeployed). CI is Jenkins - ../../../amd64-srv/k8s/jenkins/.
 #
 version: '2'
 

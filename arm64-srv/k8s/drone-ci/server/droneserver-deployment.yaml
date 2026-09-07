@@ -1,5 +1,5 @@
 # NOT DEPLOYED as of 2026-09-05: no drone namespace exists in the cluster. CI is
-# Jenkins - see ../../jenkins/. The rest of this directory (postgres/,
+# Jenkins - see ../../../../amd64-srv/k8s/jenkins/. The rest of this directory (postgres/,
 # runner/) is undeployed for the same reason.
 #
 apiVersion: apps/v1
