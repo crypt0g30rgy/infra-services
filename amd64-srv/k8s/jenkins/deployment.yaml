@@ -19,12 +19,15 @@ spec:
     spec:
       serviceAccountName: jenkins
 
-      # The amd64 box, not the pi: jenkins-home used to be a hostpath directory there, but
-      # on Longhorn it is reachable from either node, and the pi had ~3670m of 4000m CPU
-      # requested against Jenkins' own 500m. Pinned rather than left to the scheduler,
-      # because "wherever it lands" is not a deployment target; the image is multi-arch.
+      # The pi — the only node, as of 2026-09-14. This read `amd64` (the dell) until the
+      # dell was removed from the cluster; an amd64 selector now matches nothing and the
+      # pod sits Pending. jenkins/jenkins:2.580 is multi-arch, so the move is free.
+      #
+      # The CPU argument that motivated the original pin is now moot — there is nowhere
+      # else to go. Watch Jenkins' 500m against the pi's budget instead: the old crowding
+      # (~3670m of 4000m requested) is what pushed it off this node in the first place.
       nodeSelector:
-        kubernetes.io/arch: amd64
+        kubernetes.io/arch: arm64
 
       containers:
       - name: jenkins

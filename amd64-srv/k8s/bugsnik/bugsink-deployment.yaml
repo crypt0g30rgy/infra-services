@@ -24,9 +24,11 @@ spec:
       labels:
         app: bugsink
     spec:
-      # Stateless half of the pair; the database is on the pi. See ../../../k8s.md.
+      # The pi — the only node, as of 2026-09-14, and where the database already was. This
+      # read `amd64` (the dell) until the dell was removed from the cluster; an amd64
+      # selector now matches nothing. bugsink/bugsink:2.5.1 is multi-arch (amd64, arm64).
       nodeSelector:
-        kubernetes.io/arch: amd64
+        kubernetes.io/arch: arm64
 
       # 14237 is the image's `bugsink` user.
       securityContext:

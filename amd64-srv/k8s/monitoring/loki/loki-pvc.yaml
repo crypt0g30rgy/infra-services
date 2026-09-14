@@ -7,20 +7,25 @@
 # loki-configmap.yaml needs well under 1Gi. The class is Retain - deleting the PVC leaves
 # the data for a human.
 #
-# ONE REPLICA, ON THE amd64 NODE - and you cannot see that from here. Longhorn's per-volume settings
+# ONE REPLICA, ON THE PI - and you cannot see that from here. Longhorn's per-volume settings
 # live on the `volumes.longhorn.io` object, not on the claim, so this file cannot express
-# them and a re-apply cannot restore them. As of 2026-09-07 the volume behind this claim is
-# `numberOfReplicas: 1`, `nodeSelector: ["amd64"]` (a Longhorn *node tag* on
-# `dell-amd64-32gb-srv`, not a Kubernetes label), `dataLocality: best-effort`:
+# them and a re-apply cannot restore them. Set them after the claim binds:
 #
 #   kubectl -n longhorn-system get volumes.longhorn.io \
 #     -o custom-columns='NAME:.metadata.name,PVC:.status.kubernetesStatus.pvcName,REPLICAS:.spec.numberOfReplicas,NODES:.spec.nodeSelector,STATE:.status.robustness'
 #
-# It was two replicas until then, which the pi could no longer schedule - its Longhorn disk
-# has ~0.7Gi of its 54.7Gi budget left, so the second replica sat in
-# `ReplicaSchedulingFailure` and the volume reported `degraded` indefinitely. One replica of
-# 30-day-retention logs is an acceptable trade; do not copy the setting onto a database
-# volume. loki-deployment.yaml pins the pod to the same node - move one and you move both.
+# The 2026-09-07 setting was `nodeSelector: ["amd64"]` - a Longhorn *node tag* on
+# `dell-amd64-32gb-srv`, not a Kubernetes label. That node was removed from the cluster on
+# 2026-09-14, so the tag no longer exists and a volume still carrying it cannot schedule a
+# replica anywhere. Use the pi's tag, or drop the selector entirely now that there is one node.
+#
+# `numberOfReplicas: 1` and `dataLocality: best-effort` still stand, for a new reason. The old
+# one was pressure: two replicas left the pi's Longhorn disk with ~0.7Gi of its 54.7Gi budget,
+# so the second sat in `ReplicaSchedulingFailure` and the volume reported `degraded`
+# indefinitely. The pi is now on a 500 GB SSD, but a single node cannot host two useful
+# replicas of anything regardless. One replica of 30-day-retention logs is an acceptable
+# trade; do not copy the setting onto a database volume. loki-deployment.yaml pins the pod
+# to the same node - move one and you move both.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

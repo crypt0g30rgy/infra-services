@@ -32,10 +32,17 @@ persistence:
   #   kubectl annotate sc microk8s-hostpath \
   #     storageclass.kubernetes.io/is-default-class-
   defaultClass: true
-  # 2 since both nodes have a disk. This is the number on the `longhorn` class's
-  # parameters, which is what a new PVC gets; defaultReplicaCount below is only
-  # the fallback for volumes created outside a class.
-  defaultClassReplicaCount: 2
+  # 1 since 2026-09-14: the dell was removed and this is a single-node cluster.
+  # This is the number on the `longhorn` class's parameters, which is what a new
+  # PVC gets; defaultReplicaCount below is only the fallback for volumes created
+  # outside a class.
+  #
+  # It must be 1, not merely "may as well be". `replicaSoftAntiAffinity: false`
+  # below is hard anti-affinity, so a 2-replica volume on one node can never place
+  # its second replica: it reports `degraded` forever and the first
+  # ReplicaSchedulingFailure looks like a disk-space bug. Raise this back to 2
+  # only when a second node with a disk actually exists.
+  defaultClassReplicaCount: 1
   # A deleted PVC must not take the data with it. Do not change.
   reclaimPolicy: Retain
   defaultDataLocality: disabled

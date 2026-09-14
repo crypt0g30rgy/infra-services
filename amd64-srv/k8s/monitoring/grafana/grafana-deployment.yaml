@@ -23,12 +23,13 @@ spec:
       labels:
         app: grafana
     spec:
-      # The amd64 box, with the rest of the infrastructure; see ../../../../k8s.md,
-      # "Node placement".
+      # The pi — the only node, as of 2026-09-14. This read `amd64` (the dell) until the
+      # dell was removed from the cluster; an amd64 selector now matches nothing and the
+      # pod sits Pending. grafana/grafana:13.2.1 is multi-arch (amd64, arm64, arm/v7).
       # The volume moves with it: SQLite's format is architecture-independent, unlike a
       # PostgreSQL data directory. Keep maxSurge 0 - two pods mean two RWO attach attempts.
       nodeSelector:
-        kubernetes.io/arch: amd64
+        kubernetes.io/arch: arm64
 
       # 472 is the image's `grafana` user; fsGroup is what makes a fresh Longhorn volume
       # writable by it, otherwise Grafana exits "unable to open database file".
