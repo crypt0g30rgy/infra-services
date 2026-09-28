@@ -1,0 +1,79 @@
+services:
+  rustfs-s3:
+    image: rustfs/rustfs:1.0.0
+    container_name: rustfs-s3
+    restart: unless-stopped
+
+    security_opt:
+      - "no-new-privileges:true"
+
+    networks:
+      - internal
+    ports:
+      - "9004:9000"
+      - "9005:9001"
+
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_IAM_MASTER_KEY: ${RUSTFS_IAM_MASTER_KEY}
+
+      RUSTFS_ADDRESS: "0.0.0.0:9000"
+      RUSTFS_CONSOLE_ADDRESS: "0.0.0.0:9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+
+      RUSTFS_REGION: "eu-west-1"
+
+      RUSTFS_OBS_LOGGER_LEVEL: "error"
+      RUSTFS_OBS_LOG_DIRECTORY: "/logs"
+
+    command: server /data --console-address ":9001"
+
+    volumes:
+      - ./rustfs-data:/data
+      - ./rustfs-logs:/logs # sudo chown -R 10001:10001 ./rustfs-data ./rustfs-logs && sudo chmod 750 ./rustfs-data ./rustfs-logs
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:9000/health/ready"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    labels:
+      - "traefik.enable=true"
+
+      # S3 API
+      - "traefik.http.routers.rustfs-api.rule=Host(`${RUSTFS_S3_HOST}`)"
+      - "traefik.http.routers.rustfs-api.entrypoints=websecure"
+      - "traefik.http.routers.rustfs-api.tls=true"
+      - "traefik.http.routers.rustfs-api.tls.certresolver=myresolver"
+      - "traefik.http.routers.rustfs-api.service=rustfs-api"
+      - "traefik.http.services.rustfs-api.loadbalancer.server.port=9000"
+
+      # Console
+      - "traefik.http.routers.rustfs-console.rule=Host(`${RUSTFS_CONSOLE_HOST}`)"
+      - "traefik.http.routers.rustfs-console.entrypoints=websecure"
+      - "traefik.http.routers.rustfs-console.tls=true"
+      - "traefik.http.routers.rustfs-console.tls.certresolver=myresolver"
+      - "traefik.http.routers.rustfs-console.service=rustfs-console"
+      - "traefik.http.services.rustfs-console.loadbalancer.server.port=9001"
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+networks:
+  internal:
+    external: true

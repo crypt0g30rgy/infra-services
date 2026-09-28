@@ -23,3 +23,8 @@ data:
 
   # Always keep /data as default storage path
   DATA_FOLDER: "/data"
+
+  # Disable Icon fetching server side
+  DISABLE_ICON_DOWNLOAD: "true"
+  ICON_SERVICE: "duckduckgo"
+  ICON_REDIRECT_CODE: "302"

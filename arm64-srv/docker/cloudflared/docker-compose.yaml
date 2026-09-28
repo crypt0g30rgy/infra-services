@@ -1,0 +1,19 @@
+networks:
+  proxy:
+    external: true
+  dashboards:
+    external: true
+services:
+  # -------------------------
+  # Cloudflare Tunnel
+  # -------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    container_name: cloudflared
+    restart: unless-stopped
+    networks:
+      - proxy
+      - dashboards
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    labels:
+      - "traefik.enable=false"  # disable traefik for this container

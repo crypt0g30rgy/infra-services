@@ -2,7 +2,7 @@
 # (~/homepage/docker-compose.yml exists, `docker compose ls` does not list it).
 # Kept for reference; delete once you are sure it is not coming back.
 #
-version: "3.8"
+
 
 services:
   homepage:

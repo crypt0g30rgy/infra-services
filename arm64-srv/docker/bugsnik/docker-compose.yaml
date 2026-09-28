@@ -12,7 +12,7 @@ networks:
 
 services:
   bugsink:
-    image: bugsink/bugsink:2.5.1
+    image: bugsink/bugsink:2.6.1
     container_name: bugsink
     restart: unless-stopped
     networks:

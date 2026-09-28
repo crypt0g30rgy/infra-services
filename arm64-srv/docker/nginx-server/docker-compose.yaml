@@ -2,7 +2,7 @@
 # public ingress is Traefik + cloudflared (../../k8s/ingress/). Kept for
 # reference only.
 #
-version: "3.8"
+
 
 networks:
   proxy:

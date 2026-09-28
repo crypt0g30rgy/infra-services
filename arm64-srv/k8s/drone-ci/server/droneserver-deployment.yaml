@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
       - name: drone-server
-        image: drone/drone:1.6.5
+        image: drone/drone:2.28.2
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80

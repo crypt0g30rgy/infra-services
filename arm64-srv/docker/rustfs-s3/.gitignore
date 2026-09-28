@@ -1,0 +1,5 @@
+rustfs-data/*
+rustfs-logs/*
+
+!rustfs-data/.gitkeep
+!rustfs-logs/.gitkeep

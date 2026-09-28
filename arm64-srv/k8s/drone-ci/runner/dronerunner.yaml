@@ -17,7 +17,7 @@ spec:
       serviceAccountName: drone-runner
       containers:
       - name: runner
-        image: drone/drone-runner-kube:latest
+        image: drone/drone-runner-kube:1.0.0-rc.5
         ports:
         - containerPort: 3000
         env:

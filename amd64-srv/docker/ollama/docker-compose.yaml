@@ -4,8 +4,6 @@
 # M1000M with 2 GB - enough for a small quantised model, not for what the compose
 # file assumes. Check the model and the memory limits before bringing this up.
 #
-version: "3.9"
-
 services:
   ollama:
     image: ollama/ollama:latest

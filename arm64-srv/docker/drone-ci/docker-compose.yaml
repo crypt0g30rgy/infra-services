@@ -2,8 +2,6 @@
 # no drone namespace in the cluster either (see ../../k8s/drone-ci/, also
 # undeployed). CI is Jenkins - ../../../amd64-srv/k8s/jenkins/.
 #
-version: '2'
-
 services:
   drone-server:
     image: drone/drone:2.28
