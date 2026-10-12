@@ -1,0 +1,50 @@
+
+services:
+  home-assistant:
+    container_name: home-assistant
+    image: ghcr.io/home-assistant/home-assistant:2026.10.1
+    restart: unless-stopped
+
+    networks:
+      - internal
+
+    environment:
+      TZ: ${TZ:-Europe/London}
+
+    volumes:
+      - ./config:/config
+      - /etc/localtime:/etc/localtime:ro
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Home Assistant web interface and API
+    expose:
+      - "8123"
+    ports:
+      - "8123:8123"
+
+    labels:
+      - "traefik.enable=true"
+
+      # Router
+      - "traefik.http.routers.homeassistant.rule=Host(`${HA_HOST}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=websecure"
+      - "traefik.http.routers.homeassistant.tls=true"
+      - "traefik.http.routers.homeassistant.tls.certresolver=myresolver"
+
+      # Backend service
+      - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+networks:
+  internal:
+    external: true

@@ -34,23 +34,23 @@ spec:
         # No /data/logs any more - accessLog goes to stdout. /data/acme is kept empty at
         # mode 700 so a restored ACME resolver has somewhere to write without fixing
         # ownership by hand on a live volume.
-        - name: init-dirs
-          image: alpine:3.24
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /data/acme
-              chown -R 65532:65532 /data
-              chmod 700 /data/acme
-          securityContext:
-            runAsUser: 0
-          volumeMounts:
-            - name: data
-              mountPath: /data
+        # - name: init-dirs
+        #   image: alpine:3.24
+        #   command:
+        #     - /bin/sh
+        #     - -c
+        #     - |
+        #       mkdir -p /data/acme
+        #       chown -R 65532:65532 /data
+        #       chmod 700 /data/acme
+        #   securityContext:
+        #     runAsUser: 0
+        #   volumeMounts:
+        #     - name: data
+        #       mountPath: /data
       containers:
         - name: traefik
-          image: traefik:v3.7.13
+          image: traefik:v3.7.14
           args:
             - --configfile=/etc/traefik/traefik.yaml
           # No env on purpose. CF_DNS_API_TOKEN used to be read from a `cloudflare-api-token`
@@ -77,8 +77,8 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/traefik
-            - name: data
-              mountPath: /data
+            # - name: data
+            #   mountPath: /data
           readinessProbe:
             httpGet:
               path: /ping
@@ -107,6 +107,6 @@ spec:
         - name: config
           configMap:
             name: traefik-config
-        - name: data
-          persistentVolumeClaim:
-            claimName: traefik-data
+        # - name: data
+        #   persistentVolumeClaim:
+        #     claimName: traefik-data

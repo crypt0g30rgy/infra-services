@@ -1,6 +1,6 @@
 # Local Docker Registry with Image Lifecycle Cleanup
 
-`registry:3.1.1` behind traefik, a read/write UI, and a `registry-cleaner`
+`registry:3.1.2` behind traefik, a read/write UI, and a `registry-cleaner`
 sidecar that enforces retention daily.
 
 ```
@@ -42,7 +42,7 @@ tag names — tag counts run about double manifest counts.
 Deleting a manifest through the v2 API only unlinks it. The blobs — where the
 gigabytes are — are only freed by `registry garbage-collect`, which the sidecar
 runs at the end of each pass (`RUN_GC=1`). That is why the cleaner is built on
-`registry:3.1.1` and mounts `./data` read-write: it needs the `registry` binary
+`registry:3.1.2` and mounts `./data` read-write: it needs the `registry` binary
 and the storage directory. It does **not** get `/var/run/docker.sock`; the
 version this replaced used the socket to `docker exec` into the registry
 container, which trades root-equivalent control of this host for one bind mount.

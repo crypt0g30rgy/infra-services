@@ -115,7 +115,7 @@ services:
   # Retention + garbage collection. Runs cleanup-registry.sh once on start and
   # then daily at CLEANUP_AT (UTC).
   #
-  # Built on registry:3.1.1 - the same image as the registry itself - for one
+  # Built on registry:3.1.2 - the same image as the registry itself - for one
   # reason: deleting a manifest through the v2 API only unlinks it, and the only
   # thing that reclaims the blobs is `registry garbage-collect`, which needs the
   # `registry` binary AND direct access to the storage directory. Hence
