@@ -8,7 +8,7 @@ networks:
 
 services:
   verdaccio:
-    image: verdaccio/verdaccio:6
+    image: verdaccio/verdaccio:7
     container_name: npm_server
     ports:
       - "4873:4873"

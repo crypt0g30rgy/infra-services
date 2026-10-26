@@ -40,7 +40,7 @@ spec:
 
       containers:
       - name: bugsink
-        image: bugsink/bugsink:2.6.1
+        image: bugsink/bugsink:2.6.2
         imagePullPolicy: IfNotPresent
 
         ports:

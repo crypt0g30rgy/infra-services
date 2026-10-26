@@ -50,7 +50,7 @@ spec:
         #       mountPath: /data
       containers:
         - name: traefik
-          image: traefik:v3.7.14
+          image: traefik:v3.7.16
           args:
             - --configfile=/etc/traefik/traefik.yaml
           # No env on purpose. CF_DNS_API_TOKEN used to be read from a `cloudflare-api-token`

@@ -19,3 +19,13 @@ spec:
                 name: jenkins
                 port:
                   number: 80
+    - host: jenkins.example.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jenkins
+                port:
+                  number: 80
