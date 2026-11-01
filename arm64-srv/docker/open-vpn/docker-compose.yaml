@@ -6,7 +6,7 @@
 
 services:
   openvpn:
-    image: kylemanna/openvpn:latest
+    image: openvpn/openvpn-as:3.2.3-8444f22d-Ubuntu26
     container_name: openvpn
     restart: unless-stopped
     cap_add:

@@ -23,7 +23,7 @@ services:
       - proxy
 
   pypi-server:
-    image: pypiserver/pypiserver:latest
+    image: pypiserver/pypiserver:v2.4.2
     container_name: pip_server
     ports:
       - "4874:8080"
