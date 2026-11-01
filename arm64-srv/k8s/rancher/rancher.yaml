@@ -708,7 +708,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: rancher-post-delete
-          image: "rancher/shell:v0.7.0"
+          image: "rancher/shell:v7.0.0"
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
@@ -763,7 +763,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: rancher-pre-upgrade
-          image: "rancher/shell:v0.7.0"
+          image: "rancher/shell:v7.0.0"
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
