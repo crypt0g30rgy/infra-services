@@ -10,7 +10,7 @@ networks:
 
 services:
   mobsf:
-    image: popensecurity/mobile-security-framework-mobsf:v4.6.4
+    image: opensecurity/mobile-security-framework-mobsf:v4.6.6
     container_name: mobsf
     restart: unless-stopped
 

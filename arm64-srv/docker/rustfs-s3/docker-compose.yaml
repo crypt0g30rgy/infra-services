@@ -1,6 +1,6 @@
 services:
   rustfs-s3:
-    image: rustfs/rustfs:1.0.4
+    image: rustfs/rustfs:1.0.6
     container_name: rustfs-s3
     restart: unless-stopped
 

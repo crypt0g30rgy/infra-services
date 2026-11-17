@@ -32,7 +32,7 @@ services:
 
   # ---------- Gitea ----------
   gitea:
-    image: gitea/gitea:28.2
+    image: gitea/gitea:28.4
     container_name: gitea
     restart: unless-stopped
     environment:

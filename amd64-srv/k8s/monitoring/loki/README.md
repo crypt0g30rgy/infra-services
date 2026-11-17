@@ -41,9 +41,9 @@ the file is most of the way to not validating at all:
 
 ```bash
 kubectl apply -f amd64-srv/k8s/monitoring/loki/loki-configmap.yaml
-kubectl run loki-verify -n monitoring --restart=Never --image=grafana/loki:3.7.7 --overrides='
+kubectl run loki-verify -n monitoring --restart=Never --image=grafana/loki:3.7.10 --overrides='
 {"spec":{"securityContext":{"runAsUser":10001,"runAsGroup":10001},"containers":[{"name":"loki-verify",
-"image":"grafana/loki:3.7.7","args":["-config.file=/etc/loki/loki.yaml","-verify-config"],
+"image":"grafana/loki:3.7.10","args":["-config.file=/etc/loki/loki.yaml","-verify-config"],
 "volumeMounts":[{"name":"config","mountPath":"/etc/loki"}]}],"volumes":[{"name":"config",
 "configMap":{"name":"loki-config"}}]}}'
 kubectl -n monitoring logs loki-verify        # empty + exit 0 = valid
